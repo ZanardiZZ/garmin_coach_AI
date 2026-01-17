@@ -1,0 +1,9 @@
+{
+  "name": "coach-fit-export",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "dependencies": {
+    "@garmin/fitsdk": "^21.180.0"
+  }
+}

@@ -1,0 +1,131 @@
+name: Tests
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  test-bash:
+    name: Bash Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq sqlite3 jq curl bc netcat-openbsd shellcheck
+
+      - name: Install BATS
+        run: |
+          git clone https://github.com/bats-core/bats-core.git /tmp/bats
+          cd /tmp/bats && sudo ./install.sh /usr/local
+
+      - name: Install BATS helpers
+        run: |
+          mkdir -p tests/bats-libs
+          git clone https://github.com/bats-core/bats-support.git tests/bats-libs/bats-support
+          git clone https://github.com/bats-core/bats-assert.git tests/bats-libs/bats-assert
+          git clone https://github.com/bats-core/bats-file.git tests/bats-libs/bats-file
+
+      - name: Run Bash unit tests
+        run: make test-unit-bash
+
+      - name: Run SQL tests
+        run: make test-sql
+
+      - name: Run shellcheck
+        run: make lint-bash
+        continue-on-error: true
+
+  test-node:
+    name: Node.js Tests
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node-version: [18, 20, 22]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+          cache-dependency-path: 'fit/package-lock.json'
+
+      - name: Install Node.js dependencies
+        run: cd fit && npm ci
+
+      - name: Run Node.js tests
+        run: cd fit && npm test
+
+      - name: Run ESLint
+        run: cd fit && npx eslint *.mjs
+        continue-on-error: true
+
+  coverage:
+    name: Coverage Report
+    runs-on: ubuntu-latest
+    needs: [test-bash, test-node]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: 'fit/package-lock.json'
+
+      - name: Install Node.js dependencies
+        run: cd fit && npm ci
+
+      - name: Generate coverage report
+        run: cd fit && npm run coverage
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          directory: ./fit/coverage
+          flags: nodejs
+          name: Node.js Coverage
+        continue-on-error: true
+
+  lint:
+    name: Linting
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install shellcheck
+        run: sudo apt-get install -y shellcheck
+
+      - name: Run shellcheck on scripts
+        run: |
+          find bin/ -type f -name "*.sh" -exec shellcheck {} +
+          find tests/ -type f -name "*.bash" -exec shellcheck {} + || true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: 'fit/package-lock.json'
+
+      - name: Install Node.js dependencies
+        run: cd fit && npm ci
+
+      - name: Run ESLint
+        run: cd fit && npx eslint *.mjs || true

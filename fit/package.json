@@ -3,7 +3,19 @@
   "version": "0.1.0",
   "type": "module",
   "private": true,
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:ui": "vitest --ui",
+    "coverage": "vitest run --coverage"
+  },
   "dependencies": {
     "@garmin/fitsdk": "^21.180.0"
+  },
+  "devDependencies": {
+    "@vitest/coverage-v8": "^1.1.0",
+    "@vitest/ui": "^1.1.0",
+    "eslint": "^8.56.0",
+    "vitest": "^1.1.0"
   }
 }

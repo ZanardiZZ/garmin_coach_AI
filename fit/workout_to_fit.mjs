@@ -21,10 +21,84 @@ import process from 'node:process';
 
 import { Encoder, Profile } from '@garmin/fitsdk';
 
+// ---------- Helpers ----------
+
+function log(level, msg) {
+  const ts = new Date().toISOString();
+  const prefix = `[${ts}][fit][${level}]`;
+  if (level === 'ERR') {
+    console.error(`${prefix} ${msg}`);
+  } else {
+    console.log(`${prefix} ${msg}`);
+  }
+}
+
 function arg(name, def = null) {
   const idx = process.argv.indexOf(name);
   if (idx === -1) return def;
   return process.argv[idx + 1] ?? def;
+}
+
+function fileExists(filePath) {
+  try {
+    fs.accessSync(filePath, fs.constants.R_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function readJsonFile(filePath, description) {
+  if (!fileExists(filePath)) {
+    throw new Error(`Arquivo ${description} não encontrado: ${filePath}`);
+  }
+
+  let content;
+  try {
+    content = fs.readFileSync(filePath, 'utf8');
+  } catch (err) {
+    throw new Error(`Erro ao ler ${description}: ${err.message}`);
+  }
+
+  if (!content.trim()) {
+    throw new Error(`Arquivo ${description} está vazio: ${filePath}`);
+  }
+
+  try {
+    return JSON.parse(content);
+  } catch (err) {
+    throw new Error(`JSON inválido em ${description}: ${err.message}`);
+  }
+}
+
+function validateWorkout(workout) {
+  const errors = [];
+
+  if (!workout || typeof workout !== 'object') {
+    errors.push('Workout deve ser um objeto JSON válido');
+    return errors;
+  }
+
+  if (!workout.segments) {
+    errors.push('Campo "segments" é obrigatório');
+  } else if (!Array.isArray(workout.segments)) {
+    errors.push('Campo "segments" deve ser um array');
+  } else if (workout.segments.length === 0) {
+    errors.push('Array "segments" não pode estar vazio');
+  } else {
+    workout.segments.forEach((seg, i) => {
+      if (!seg.name) {
+        errors.push(`Segment[${i}]: campo "name" é obrigatório`);
+      }
+      if (seg.duration_min === undefined || seg.duration_min === null) {
+        errors.push(`Segment[${i}]: campo "duration_min" é obrigatório`);
+      } else if (typeof seg.duration_min !== 'number' || seg.duration_min <= 0) {
+        errors.push(`Segment[${i}]: "duration_min" deve ser número positivo`);
+      }
+    });
+  }
+
+  return errors;
 }
 
 function toMsFromMin(min) {
@@ -46,7 +120,7 @@ function intensityEnumFromName(name = '') {
 }
 
 // FIT: valores especificos de FC precisam ser somados a +100.
-// (ex.: 125 bpm -> 225) 
+// (ex.: 125 bpm -> 225)
 function fitHrValue(bpm) {
   const n = Number(bpm);
   if (!Number.isFinite(n) || n <= 0) return 0;
@@ -114,50 +188,112 @@ function buildSteps(workout, constraints) {
   return steps;
 }
 
+function showUsage() {
+  console.log(`
+Uso: node workout_to_fit.mjs [opções]
+
+Opções:
+  --in, -i <arquivo>          Arquivo JSON do workout (obrigatório)
+  --out, -o <arquivo>         Arquivo FIT de saída (default: workout.fit)
+  --constraints, -c <arquivo> Arquivo JSON com constraints de FC (opcional)
+  --help, -h                  Mostra esta ajuda
+
+Exemplo:
+  node workout_to_fit.mjs --in treino.json --out treino.fit --constraints limits.json
+`);
+}
+
 function main() {
+  // Verifica ajuda
+  if (process.argv.includes('--help') || process.argv.includes('-h')) {
+    showUsage();
+    process.exit(0);
+  }
+
   const inFile = arg('--in', arg('-i'));
   const outFile = arg('--out', arg('-o', 'workout.fit'));
   const constraintsFile = arg('--constraints', arg('-c'));
 
+  // Valida argumentos
   if (!inFile) {
-    console.error('Uso: node workout_to_fit.mjs --in workout.json --out workout.fit [--constraints constraints.json]');
+    log('ERR', 'Arquivo de entrada não especificado. Use --in <arquivo>');
+    showUsage();
     process.exit(2);
   }
 
-  const workout = JSON.parse(fs.readFileSync(inFile, 'utf8'));
-  const constraints = constraintsFile ? JSON.parse(fs.readFileSync(constraintsFile, 'utf8')) : {};
-
-  const title = normTitle(workout.workout_title ?? workout.title);
-  const steps = buildSteps(workout, constraints);
-  if (!steps.length) {
-    console.error('[ERR] Nenhum step valido (segments vazios ou duration_min invalido).');
+  // Lê e valida workout
+  let workout;
+  try {
+    workout = readJsonFile(inFile, 'workout');
+  } catch (err) {
+    log('ERR', err.message);
     process.exit(1);
   }
 
-  const encoder = new Encoder();
+  const validationErrors = validateWorkout(workout);
+  if (validationErrors.length > 0) {
+    log('ERR', 'Workout inválido:');
+    validationErrors.forEach(e => console.error(`  - ${e}`));
+    process.exit(1);
+  }
 
-  // 1) file_id: para workout, basta setar type.
-  encoder.writeMesg({
-    mesgNum: Profile.MesgNum.FILE_ID,
-    type: 'workout',
-    // manufacturer/product/serialNumber sao opcionais se arquivo "intermediario".
-  });
+  // Lê constraints (opcional)
+  let constraints = {};
+  if (constraintsFile) {
+    try {
+      constraints = readJsonFile(constraintsFile, 'constraints');
+    } catch (err) {
+      log('WARN', `Constraints não carregados: ${err.message}`);
+      // Continua sem constraints
+    }
+  }
 
-  // 2) workout summary
-  encoder.writeMesg({
-    mesgNum: Profile.MesgNum.WORKOUT,
-    wktName: title,
-    sport: 'running',
-    numValidSteps: steps.length,
-    // capabilities pode ser omitido
-  });
+  // Gera steps
+  const title = normTitle(workout.workout_title ?? workout.title);
+  const steps = buildSteps(workout, constraints);
 
-  // 3) steps
-  for (const s of steps) encoder.writeMesg(s);
+  if (!steps.length) {
+    log('ERR', 'Nenhum step válido gerado (segments vazios ou duration_min inválido)');
+    process.exit(1);
+  }
 
-  const bytes = encoder.close();
-  fs.writeFileSync(outFile, Buffer.from(bytes));
-  console.log(`[OK] Gerado: ${path.resolve(outFile)} (steps=${steps.length})`);
+  // Gera arquivo FIT
+  let encoder;
+  try {
+    encoder = new Encoder();
+
+    // 1) file_id: para workout, basta setar type.
+    encoder.writeMesg({
+      mesgNum: Profile.MesgNum.FILE_ID,
+      type: 'workout',
+    });
+
+    // 2) workout summary
+    encoder.writeMesg({
+      mesgNum: Profile.MesgNum.WORKOUT,
+      wktName: title,
+      sport: 'running',
+      numValidSteps: steps.length,
+    });
+
+    // 3) steps
+    for (const s of steps) encoder.writeMesg(s);
+
+    const bytes = encoder.close();
+
+    // Escreve arquivo
+    const outDir = path.dirname(outFile);
+    if (outDir && outDir !== '.' && !fs.existsSync(outDir)) {
+      fs.mkdirSync(outDir, { recursive: true });
+    }
+
+    fs.writeFileSync(outFile, Buffer.from(bytes));
+    log('INFO', `Gerado: ${path.resolve(outFile)} (steps=${steps.length}, title="${title}")`);
+
+  } catch (err) {
+    log('ERR', `Falha ao gerar FIT: ${err.message}`);
+    process.exit(1);
+  }
 }
 
 main();

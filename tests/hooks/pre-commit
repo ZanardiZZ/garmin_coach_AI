@@ -1,0 +1,58 @@
+#!/bin/bash
+# pre-commit hook - Roda testes unitários antes de permitir commit
+
+set -e
+
+echo "🔍 Rodando testes unitários antes do commit..."
+
+# Cores para output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
+# Detecta diretório raiz do projeto
+PROJECT_ROOT="$(git rev-parse --show-toplevel)"
+cd "$PROJECT_ROOT"
+
+# Verifica se BATS está instalado
+if ! command -v bats &>/dev/null; then
+  echo -e "${YELLOW}⚠️  BATS não instalado. Pulando testes Bash.${NC}"
+  echo "   Para instalar: ./tests/install_deps.sh"
+  SKIP_BASH=true
+fi
+
+# Verifica se Node.js está instalado
+if ! command -v node &>/dev/null; then
+  echo -e "${YELLOW}⚠️  Node.js não instalado. Pulando testes Node.js.${NC}"
+  SKIP_NODE=true
+fi
+
+# Roda testes unitários Bash
+if [[ "${SKIP_BASH:-}" != "true" ]]; then
+  echo "  → Testes unitários Bash..."
+  if ! make test-unit-bash >/dev/null 2>&1; then
+    echo -e "${RED}❌ Testes unitários Bash falharam!${NC}"
+    echo ""
+    echo "   Execute 'make test-unit-bash' para ver os erros."
+    echo "   Para commitar mesmo assim: git commit --no-verify"
+    exit 1
+  fi
+  echo -e "${GREEN}  ✅ Testes unitários Bash passaram${NC}"
+fi
+
+# Roda testes Node.js
+if [[ "${SKIP_NODE:-}" != "true" && -d fit/node_modules ]]; then
+  echo "  → Testes Node.js..."
+  if ! (cd fit && npm test --silent) >/dev/null 2>&1; then
+    echo -e "${RED}❌ Testes Node.js falharam!${NC}"
+    echo ""
+    echo "   Execute 'cd fit && npm test' para ver os erros."
+    echo "   Para commitar mesmo assim: git commit --no-verify"
+    exit 1
+  fi
+  echo -e "${GREEN}  ✅ Testes Node.js passaram${NC}"
+fi
+
+echo -e "${GREEN}✅ Todos os testes passaram! Commit permitido.${NC}"
+exit 0

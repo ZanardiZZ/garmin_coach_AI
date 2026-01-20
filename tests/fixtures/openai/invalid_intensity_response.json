@@ -1,0 +1,21 @@
+{
+  "id": "chatcmpl-test128",
+  "object": "chat.completion",
+  "created": 1705579200,
+  "model": "gpt-4o",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "{\"tipo\":\"easy\",\"duracao_total_min\":60,\"objetivo\":\"Corrida com tiros\",\"descricao_curta\":\"60min com 6x1000m Z3\",\"segmentos\":[{\"ordem\":1,\"tipo\":\"warmup\",\"duracao_min\":10,\"descricao\":\"Aquecimento\",\"intensidade\":\"Z1\",\"alvo_hr\":\"até 135 bpm\"},{\"ordem\":2,\"tipo\":\"work\",\"duracao_min\":5,\"descricao\":\"Tiro Z3\",\"intensidade\":\"Z3\",\"alvo_hr\":\"155-165 bpm\"},{\"ordem\":3,\"tipo\":\"rest\",\"duracao_min\":2,\"descricao\":\"Recuperação\",\"intensidade\":\"Z1\",\"alvo_hr\":\"até 135 bpm\"},{\"ordem\":4,\"tipo\":\"cooldown\",\"duracao_min\":10,\"descricao\":\"Volta à calma\",\"intensidade\":\"Z1\",\"alvo_hr\":\"até 135 bpm\"}],\"avisos\":[\"Fazer 6 repetições de 1000m\"],\"nutricao\":{\"carbs_g_per_h\":0,\"fluids_ml_per_h\":400,\"sodium_mg_per_h\":0}}"
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 850,
+    "completion_tokens": 220,
+    "total_tokens": 1070
+  }
+}

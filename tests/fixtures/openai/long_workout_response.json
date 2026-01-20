@@ -1,0 +1,21 @@
+{
+  "id": "chatcmpl-test125",
+  "object": "chat.completion",
+  "created": 1705579200,
+  "model": "gpt-4o",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "{\"tipo\":\"long\",\"duracao_total_min\":150,\"objetivo\":\"Long run principal com estratégia run/walk para desenvolvimento de resistência aeróbica\",\"descricao_curta\":\"150min long run progressivo com run/walk\",\"segmentos\":[{\"ordem\":1,\"tipo\":\"warmup\",\"duracao_min\":10,\"descricao\":\"Aquecimento progressivo leve\",\"intensidade\":\"Z1\",\"alvo_hr\":\"até 135 bpm\"},{\"ordem\":2,\"tipo\":\"main\",\"duracao_min\":60,\"descricao\":\"Fase 1 - Run contínuo Z2\",\"intensidade\":\"Z2\",\"alvo_hr\":\"135-150 bpm\",\"alvo_pace\":\"6:15-6:45 min/km\"},{\"ordem\":3,\"tipo\":\"main\",\"duracao_min\":60,\"descricao\":\"Fase 2 - Run/walk 9min/1min\",\"intensidade\":\"Z2\",\"alvo_hr\":\"135-150 bpm\",\"alvo_pace\":\"6:00-6:30 min/km (run)\",\"notas\":\"Alternar 9min corrida + 1min caminhada rápida\"},{\"ordem\":4,\"tipo\":\"main\",\"duracao_min\":15,\"descricao\":\"Fase 3 - Progressivo controlado\",\"intensidade\":\"Z2-Z3\",\"alvo_hr\":\"145-160 bpm\",\"alvo_pace\":\"5:45-6:15 min/km\"},{\"ordem\":5,\"tipo\":\"cooldown\",\"duracao_min\":5,\"descricao\":\"Desaceleração final\",\"intensidade\":\"Z1\",\"alvo_hr\":\"até 140 bpm\"}],\"avisos\":[\"Hidratar a cada 15-20min\",\"Consumir gel/carbs a cada 30-40min\",\"Monitorar sinais de fadiga excessiva\",\"Run/walk na fase 2 é essencial para sustentabilidade\"],\"nutricao\":{\"carbs_g_per_h\":45,\"fluids_ml_per_h\":600,\"sodium_mg_per_h\":400}}"
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 920,
+    "completion_tokens": 380,
+    "total_tokens": 1300
+  }
+}

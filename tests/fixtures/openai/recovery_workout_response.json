@@ -1,0 +1,21 @@
+{
+  "id": "chatcmpl-test126",
+  "object": "chat.completion",
+  "created": 1705579200,
+  "model": "gpt-4o",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "{\"tipo\":\"recovery\",\"duracao_total_min\":40,\"objetivo\":\"Sessão regenerativa pós-esforço para recuperação ativa\",\"descricao_curta\":\"40min Z1 ultra-leve\",\"segmentos\":[{\"ordem\":1,\"tipo\":\"warmup\",\"duracao_min\":5,\"descricao\":\"Início caminhada leve\",\"intensidade\":\"Z1\",\"alvo_hr\":\"até 125 bpm\"},{\"ordem\":2,\"tipo\":\"main\",\"duracao_min\":30,\"descricao\":\"Trote regenerativo contínuo\",\"intensidade\":\"Z1\",\"alvo_hr\":\"120-135 bpm\",\"alvo_pace\":\"7:00-7:30 min/km\",\"notas\":\"Permitido caminhar se necessário\"},{\"ordem\":3,\"tipo\":\"cooldown\",\"duracao_min\":5,\"descricao\":\"Finalização caminhada\",\"intensidade\":\"Z1\",\"alvo_hr\":\"até 120 bpm\"}],\"avisos\":[\"Prioridade máxima: baixíssima intensidade\",\"Não ultrapasse Z1 em nenhum momento\",\"Se sentir qualquer desconforto, encurte ou caminhe\",\"Foco em circulação sanguínea e remoção de lactato\"],\"nutricao\":{\"carbs_g_per_h\":0,\"fluids_ml_per_h\":300,\"sodium_mg_per_h\":0}}"
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 860,
+    "completion_tokens": 280,
+    "total_tokens": 1140
+  }
+}

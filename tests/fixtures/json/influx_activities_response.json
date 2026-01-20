@@ -1,0 +1,92 @@
+{
+  "results": [
+    {
+      "statement_id": 0,
+      "series": [
+        {
+          "name": "activity",
+          "columns": [
+            "time",
+            "activityId",
+            "activityName",
+            "activityType",
+            "avgHr",
+            "calories",
+            "distance",
+            "duration",
+            "elevationGain",
+            "maxHr",
+            "userId"
+          ],
+          "values": [
+            [
+              "2026-01-18T06:00:00Z",
+              "12345678901",
+              "Morning Run",
+              "running",
+              145,
+              500,
+              10000,
+              3600,
+              150,
+              165,
+              "zz"
+            ],
+            [
+              "2026-01-17T06:30:00Z",
+              "12345678902",
+              "Easy Recovery",
+              "running",
+              138,
+              380,
+              7500,
+              2700,
+              80,
+              155,
+              "zz"
+            ],
+            [
+              "2026-01-15T16:00:00Z",
+              "12345678903",
+              "Interval Session",
+              "running",
+              158,
+              650,
+              12000,
+              4500,
+              180,
+              178,
+              "zz"
+            ],
+            [
+              "2026-01-12T07:00:00Z",
+              "12345678904",
+              "Long Run Weekend",
+              "running",
+              148,
+              1100,
+              20000,
+              7200,
+              300,
+              168,
+              "zz"
+            ],
+            [
+              "2026-01-11T06:00:00Z",
+              "12345678905",
+              "Easy Saturday",
+              "running",
+              142,
+              420,
+              8000,
+              3000,
+              90,
+              158,
+              "zz"
+            ]
+          ]
+        }
+      ]
+    }
+  ]
+}

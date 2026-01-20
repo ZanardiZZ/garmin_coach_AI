@@ -1,0 +1,41 @@
+# Secrets / env
+.env
+*.env
+.env.*
+
+# SQLite / data
+*.sqlite
+*.sqlite3
+/var/lib/ultra-coach/
+/data/
+/logs/
+/exports/
+
+# Runtime / temp
+tmp/
+*.log
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+package-lock.json
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Testing
+coverage/
+.nyc_output/
+*.test.sqlite
+*.test.db
+/tests/bats-libs/
+/tests/fixtures/databases/*.sqlite
+!/tests/fixtures/databases/.gitkeep
+test-results/
+.vitest/

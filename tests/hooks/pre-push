@@ -1,0 +1,87 @@
+#!/bin/bash
+# pre-push hook - Roda suite completa de testes antes de permitir push
+
+set -e
+
+echo "🔍 Rodando suite completa de testes antes do push..."
+
+# Cores para output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
+# Detecta diretório raiz do projeto
+PROJECT_ROOT="$(git rev-parse --show-toplevel)"
+cd "$PROJECT_ROOT"
+
+# Verifica dependências
+if ! command -v bats &>/dev/null; then
+  echo -e "${RED}❌ BATS não instalado!${NC}"
+  echo "   Execute: ./tests/install_deps.sh"
+  exit 1
+fi
+
+if ! command -v node &>/dev/null; then
+  echo -e "${RED}❌ Node.js não instalado!${NC}"
+  exit 1
+fi
+
+# Array para rastrear falhas
+FAILED_TESTS=()
+
+# Roda testes unitários Bash
+echo "  → Testes unitários Bash..."
+if ! make test-unit-bash >/dev/null 2>&1; then
+  FAILED_TESTS+=("unit-bash")
+  echo -e "${RED}  ✗ Falhou${NC}"
+else
+  echo -e "${GREEN}  ✅ Passou${NC}"
+fi
+
+# Roda testes SQL
+echo "  → Testes SQL..."
+if ! make test-sql >/dev/null 2>&1; then
+  FAILED_TESTS+=("sql")
+  echo -e "${RED}  ✗ Falhou${NC}"
+else
+  echo -e "${GREEN}  ✅ Passou${NC}"
+fi
+
+# Roda testes Node.js
+echo "  → Testes Node.js..."
+if ! (cd fit && npm test --silent) >/dev/null 2>&1; then
+  FAILED_TESTS+=("node")
+  echo -e "${RED}  ✗ Falhou${NC}"
+else
+  echo -e "${GREEN}  ✅ Passou${NC}"
+fi
+
+# Roda shellcheck
+echo "  → Shellcheck..."
+if ! make lint-bash >/dev/null 2>&1; then
+  echo -e "${YELLOW}  ⚠️  Shellcheck warnings (não bloqueia push)${NC}"
+else
+  echo -e "${GREEN}  ✅ Passou${NC}"
+fi
+
+# Verifica se houve falhas
+if [[ ${#FAILED_TESTS[@]} -gt 0 ]]; then
+  echo ""
+  echo -e "${RED}❌ Os seguintes testes falharam:${NC}"
+  for test in "${FAILED_TESTS[@]}"; do
+    echo "   - $test"
+  done
+  echo ""
+  echo "   Para ver os erros:"
+  [[ " ${FAILED_TESTS[@]} " =~ " unit-bash " ]] && echo "     make test-unit-bash"
+  [[ " ${FAILED_TESTS[@]} " =~ " sql " ]] && echo "     make test-sql"
+  [[ " ${FAILED_TESTS[@]} " =~ " node " ]] && echo "     cd fit && npm test"
+  echo ""
+  echo "   Para fazer push mesmo assim: git push --no-verify"
+  exit 1
+fi
+
+echo ""
+echo -e "${GREEN}✅ Todos os testes passaram! Push permitido.${NC}"
+exit 0

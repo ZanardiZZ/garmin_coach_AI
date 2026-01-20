@@ -1,0 +1,21 @@
+{
+  "id": "chatcmpl-test123",
+  "object": "chat.completion",
+  "created": 1705579200,
+  "model": "gpt-4o",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "{\"tipo\":\"easy\",\"duracao_total_min\":60,\"objetivo\":\"Corrida regenerativa leve para recuperação ativa\",\"descricao_curta\":\"60min Z1-Z2 regenerativa\",\"segmentos\":[{\"ordem\":1,\"tipo\":\"warmup\",\"duracao_min\":5,\"descricao\":\"Aquecimento caminhada/trote leve\",\"intensidade\":\"Z1\",\"alvo_hr\":\"até 130 bpm\"},{\"ordem\":2,\"tipo\":\"main\",\"duracao_min\":50,\"descricao\":\"Corrida leve e contínua\",\"intensidade\":\"Z2\",\"alvo_hr\":\"130-145 bpm\",\"alvo_pace\":\"6:30-7:00 min/km\"},{\"ordem\":3,\"tipo\":\"cooldown\",\"duracao_min\":5,\"descricao\":\"Desaceleração progressiva\",\"intensidade\":\"Z1\",\"alvo_hr\":\"até 130 bpm\"}],\"avisos\":[\"Mantenha intensidade baixa, respiração confortável\",\"Se sentir fadiga, reduza pace ou caminhe\"],\"nutricao\":{\"carbs_g_per_h\":0,\"fluids_ml_per_h\":400,\"sodium_mg_per_h\":0}}"
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 850,
+    "completion_tokens": 250,
+    "total_tokens": 1100
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "id": "chatcmpl-test124",
+  "object": "chat.completion",
+  "created": 1705579200,
+  "model": "gpt-4o",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "{\"tipo\":\"quality\",\"duracao_total_min\":75,\"objetivo\":\"Treino intervalado Z3 para desenvolver limiar aeróbico\",\"descricao_curta\":\"75min com 6x5min Z3\",\"segmentos\":[{\"ordem\":1,\"tipo\":\"warmup\",\"duracao_min\":15,\"descricao\":\"Aquecimento progressivo\",\"intensidade\":\"Z1-Z2\",\"alvo_hr\":\"até 145 bpm\"},{\"ordem\":2,\"tipo\":\"work\",\"duracao_min\":5,\"descricao\":\"Tiro Z3 (1/6)\",\"intensidade\":\"Z3\",\"alvo_hr\":\"155-165 bpm\",\"alvo_pace\":\"5:15-5:30 min/km\"},{\"ordem\":3,\"tipo\":\"rest\",\"duracao_min\":2,\"descricao\":\"Recuperação trote leve\",\"intensidade\":\"Z1\",\"alvo_hr\":\"até 135 bpm\"},{\"ordem\":4,\"tipo\":\"work\",\"duracao_min\":5,\"descricao\":\"Tiro Z3 (2/6)\",\"intensidade\":\"Z3\",\"alvo_hr\":\"155-165 bpm\",\"alvo_pace\":\"5:15-5:30 min/km\"},{\"ordem\":5,\"tipo\":\"rest\",\"duracao_min\":2,\"descricao\":\"Recuperação trote leve\",\"intensidade\":\"Z1\",\"alvo_hr\":\"até 135 bpm\"},{\"ordem\":6,\"tipo\":\"work\",\"duracao_min\":5,\"descricao\":\"Tiro Z3 (3/6)\",\"intensidade\":\"Z3\",\"alvo_hr\":\"155-165 bpm\",\"alvo_pace\":\"5:15-5:30 min/km\"},{\"ordem\":7,\"tipo\":\"rest\",\"duracao_min\":2,\"descricao\":\"Recuperação trote leve\",\"intensidade\":\"Z1\",\"alvo_hr\":\"até 135 bpm\"},{\"ordem\":8,\"tipo\":\"work\",\"duracao_min\":5,\"descricao\":\"Tiro Z3 (4/6)\",\"intensidade\":\"Z3\",\"alvo_hr\":\"155-165 bpm\",\"alvo_pace\":\"5:15-5:30 min/km\"},{\"ordem\":9,\"tipo\":\"rest\",\"duracao_min\":2,\"descricao\":\"Recuperação trote leve\",\"intensidade\":\"Z1\",\"alvo_hr\":\"até 135 bpm\"},{\"ordem\":10,\"tipo\":\"work\",\"duracao_min\":5,\"descricao\":\"Tiro Z3 (5/6)\",\"intensidade\":\"Z3\",\"alvo_hr\":\"155-165 bpm\",\"alvo_pace\":\"5:15-5:30 min/km\"},{\"ordem\":11,\"tipo\":\"rest\",\"duracao_min\":2,\"descricao\":\"Recuperação trote leve\",\"intensidade\":\"Z1\",\"alvo_hr\":\"até 135 bpm\"},{\"ordem\":12,\"tipo\":\"work\",\"duracao_min\":5,\"descricao\":\"Tiro Z3 (6/6)\",\"intensidade\":\"Z3\",\"alvo_hr\":\"155-165 bpm\",\"alvo_pace\":\"5:15-5:30 min/km\"},{\"ordem\":13,\"tipo\":\"cooldown\",\"duracao_min\":10,\"descricao\":\"Volta à calma progressiva\",\"intensidade\":\"Z1\",\"alvo_hr\":\"até 135 bpm\"}],\"avisos\":[\"Total de 30min em Z3, respeitando cap de hard minutes\",\"Mantenha ritmo consistente nos tiros\",\"Se fadiga excessiva, reduza número de repetições\"],\"nutricao\":{\"carbs_g_per_h\":30,\"fluids_ml_per_h\":500,\"sodium_mg_per_h\":300}}"
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 900,
+    "completion_tokens": 450,
+    "total_tokens": 1350
+  }
+}

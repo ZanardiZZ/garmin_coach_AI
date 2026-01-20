@@ -1,0 +1,23 @@
+{
+  "id": "chatcmpl-test127",
+  "object": "chat.completion",
+  "created": 1705579200,
+  "model": "gpt-4o",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "{\"tipo\":\"quality\",\"duracao_total_min\":60,\"objetivo\":\"Corrida leve\",\"descricao_curta\":\"60min Z2\",\"segmentos\":[{\"ordem\":1,\"tipo\":\"warmup\",\"duracao_min\":10,\"descricao\":\"Aquecimento\",\"intensidade\":\"Z1\",\"alvo_hr\":\"até 135 bpm\"},{\"ordem\":2,\"tipo\":\"main\",\"duracao_min\":45,\"descricao\":\"Corrida contínua\",\"intensidade\":\"Z2\",\"alvo_hr\":\"135-150 bpm\"},{\"ordem\":3,\"tipo\":\"cooldown\",\"duracao_min\":5,\"descricao\":\"Desaceleração\",\"intensidade\":\"Z1\",\"alvo_hr\":\"até 135 bpm\"}],\"avisos\":[],\"nutricao\":{\"carbs_g_per_h\":0,\"fluids_ml_per_h\":400,\"sodium_mg_per_h\":0}}"
+      },
+      "finish_reason": "stop",
+      "logprobs": null
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 850,
+    "completion_tokens": 180,
+    "total_tokens": 1030
+  },
+  "system_fingerprint": "fp_test"
+}

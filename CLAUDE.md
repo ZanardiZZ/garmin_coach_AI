@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Ultra Coach is an AI-powered daily training generator for ultra endurance running (12h / ~90km events). The system uses a hybrid approach:
 - **Deterministic planning**: Rule-based logic determines workout type (recovery, easy, quality, long) based on athlete state and weekly patterns
 - **AI variation**: OpenAI API generates detailed workout structures within strict constraints
-- **Data pipeline**: Syncs from InfluxDB (Garmin data via garmin-grafana) → SQLite → Daily coach run → FIT export → Telegram notification
+- **Data pipeline**: Garmin Connect (`bin/garmin_sync.py`) → InfluxDB (local v1) → SQLite → Daily coach run → FIT export → Telegram notification
 
 ## Directory Structure
 
@@ -65,6 +65,9 @@ Ultra Coach is an AI-powered daily training generator for ultra endurance runnin
 ```bash
 # Sync from InfluxDB to SQLite
 ATHLETE_ID=zz /opt/ultra-coach/bin/sync_influx_to_sqlite.sh
+
+# Garmin Connect -> InfluxDB (includes ActivityGPS when enabled)
+/opt/ultra-coach/bin/garmin_sync.sh
 ```
 
 ### FIT File Generation
@@ -81,18 +84,18 @@ node /opt/ultra-coach/fit/workout_to_fit.mjs \
 # Standard installation (requires root)
 sudo ./install.sh
 
-# Include garmin-grafana setup
-sudo ./install.sh --with-garmin-grafana
-
 # Skip symlinks or FIT dependencies
 sudo ./install.sh --no-symlinks --no-fit-deps
+
+# One-line installer (recommended)
+curl -fsSL https://raw.githubusercontent.com/ZanardiZZ/garmin_coach_AI/main/install.sh | sudo bash
 ```
 
 ## Architecture
 
 ### Daily Pipeline Flow
 
-1. **Sync** (`sync_influx_to_sqlite.sh`): Imports last 21 days of Garmin data from InfluxDB
+1. **Sync** (`sync_influx_to_sqlite.sh`): Imports last N days of Garmin data from InfluxDB
    - Running activities → `session_log` table
    - Body composition (Index S2) → `body_comp_log` table
    - Auto-tags activities: `long` (≥18km or ≥110min), `quality` (≥10min in Z3+), `easy`
@@ -127,9 +130,9 @@ sudo ./install.sh --no-symlinks --no-fit-deps
    - Converts workout JSON → Garmin FIT format via `workout_to_fit.mjs`
    - Sends as Telegram document if `TELEGRAM_BOT_TOKEN` configured
 
-7. **Notification** (`push_coach_message.sh`):
-   - Formats workout as Telegram markdown
-   - POSTs to n8n webhook → Telegram
+7. **Notification**:
+   - Weekly summary via `send_weekly_plan.sh` (Telegram bot)
+   - Daily workout via Telegram bot (webhook only if custom integration is added)
 
 ### Database Schema
 
@@ -180,7 +183,7 @@ OPENAI_API_KEY=sk-...
 MODEL=gpt-5  # or gpt-4o, etc.
 
 # InfluxDB (Garmin data source)
-INFLUX_URL=http://192.168.20.115:8086/query
+INFLUX_URL=http://localhost:8086/query
 INFLUX_DB=GarminStats
 INFLUX_USER=  # if v1.x auth enabled
 INFLUX_PASS=
@@ -189,9 +192,18 @@ INFLUX_PASS=
 TELEGRAM_BOT_TOKEN=
 TELEGRAM_CHAT_ID=
 
-# Webhook (for text notifications via n8n)
-WEBHOOK_URL=https://n8n.zanardizz.uk/webhook/coach/inbox
+# Garmin Connect
+GARMINCONNECT_EMAIL=
+GARMINCONNECT_PASSWORD=
+GARMIN_SYNC_DAYS=30
+GARMIN_FETCH_ACTIVITY_DETAILS=true
 ```
+
+## Web Setup & Dashboard
+
+- Wizard: `http://<host>:8080/setup` (stores secrets encrypted in SQLite `config_kv`).
+- Dashboard: `http://<host>:8080/` for status + weekly view.
+- Activities: `http://<host>:8080/activities` and `/activity/:id` for maps and charts.
 
 ## Key Design Principles
 
@@ -224,7 +236,7 @@ WEBHOOK_URL=https://n8n.zanardizz.uk/webhook/coach/inbox
 
 - **Language**: Bash (scripts), SQL (schema/queries), JavaScript/Node.js (FIT converter)
 - **Node.js version**: Requires Node ≥18 for ES modules in FIT converter
-- **Dependencies**: `sqlite3`, `curl`, `jq`, `node`, `npm`
+- **Dependencies**: `sqlite3`, `curl`, `jq`, `node`, `npm`, `python3` (venv for Garmin sync)
 - **FIT SDK**: Uses `@garmin/fitsdk` v21.180.0 for workout file generation
 - **AI Prompt**: Stored in `templates/coach_prompt_ultra.txt` (Portuguese, ultra-focused, structured JSON schema)
 - **Logging**: Structured format `[ISO8601][component][level] message`

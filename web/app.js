@@ -174,7 +174,10 @@ app.use(basicAuth);
 app.get('/setup', async (req, res) => {
   try {
     const config = await loadConfigMap();
-    const rows = await runSql('SELECT athlete_id, name, hr_max, hr_rest, goal_event, weekly_hours_target, coach_mode FROM athlete_profile p LEFT JOIN athlete_state s ON s.athlete_id = p.athlete_id ORDER BY p.athlete_id;');
+    const rows = await runSql(
+      'SELECT p.athlete_id, p.name, p.hr_max, p.hr_rest, p.goal_event, p.weekly_hours_target, s.coach_mode ' +
+        'FROM athlete_profile p LEFT JOIN athlete_state s ON s.athlete_id = p.athlete_id ORDER BY p.athlete_id;'
+    );
     const athletes = rows
       ? rows.split('\n').map((line) => {
           const [athlete_id, name, hr_max, hr_rest, goal_event, weekly_hours_target, coach_mode] =

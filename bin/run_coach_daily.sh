@@ -103,6 +103,9 @@ MODEL="${MODEL:-gpt-5}"
 PLAN_DATE="$(date -I)"
 # carrega env central (tokens e paths)
 source /etc/ultra-coach/env 2>/dev/null || true
+if command -v node >/dev/null 2>&1 && [ -f "$ULTRA_COACH_PROJECT_DIR/bin/config_env.mjs" ]; then
+  eval "$(node "$ULTRA_COACH_PROJECT_DIR/bin/config_env.mjs")"
+fi
 
 # sincroniza do Influx v1.1 -> SQLite (não mata o coach se falhar)
 if [ "$DRY_RUN" = "1" ]; then

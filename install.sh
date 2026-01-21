@@ -2,13 +2,20 @@
 set -euo pipefail
 
 # ==========================================================
-# garmin_coach_AI installer (idempotente)
+# Ultra Coach installer (idempotente)
+# - Clona repo (quando rodado via curl)
 # - Centraliza paths
 # - Cria symlinks
 # - Prepara env
-# - Instala deps do conversor FIT
-# - (Opcional) Ajuda a instalar garmin-grafana
+# - Instala deps (FIT, web, python)
+# - Inicializa/migra banco
+# - Configura cron + webserver
 # ==========================================================
+
+REPO_URL_DEFAULT="https://github.com/ZanardiZZ/garmin_coach_AI"
+REPO_URL="${REPO_URL:-$REPO_URL_DEFAULT}"
+TARGET_DIR_DEFAULT="/opt/ultra-coach"
+TARGET_DIR="${TARGET_DIR:-$TARGET_DIR_DEFAULT}"
 
 # Onde está este repo (assumindo /opt/ultra-coach)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -28,16 +35,13 @@ TEMPLATES_DIR="$PROJECT_DIR/templates"
 ENV_DIR="/etc/ultra-coach"
 ENV_FILE="$ENV_DIR/env"
 
-# Garmin-Grafana (opcional)
-GARMINGRAFANA_DIR_DEFAULT="/opt/garmin-grafana"
-GARMINGRAFANA_DIR="${GARMINGRAFANA_DIR:-$GARMINGRAFANA_DIR_DEFAULT}"
-GARMINGRAFANA_REPO_DEFAULT="https://github.com/arpanghosh8453/garmin-grafana.git"
-GARMINGRAFANA_REPO="${GARMINGRAFANA_REPO:-$GARMINGRAFANA_REPO_DEFAULT}"
-
 # Opções
-DO_GG=0
 DO_SYMLINKS=1
 DO_FIT_DEPS=1
+DO_WEB_DEPS=1
+DO_PY_DEPS=1
+DO_CRON=1
+DO_START_WEB=1
 
 log()  { echo "[install] $*"; }
 warn() { echo "[install][WARN] $*" >&2; }
@@ -54,27 +58,72 @@ usage() {
 Uso: ./install.sh [opções]
 
 Opções:
-  --with-garmin-grafana   Clona (ou atualiza) o repo garmin-grafana em $GARMINGRAFANA_DIR
   --no-symlinks           Não cria symlinks em /usr/local/bin
   --no-fit-deps           Não roda npm install em $FIT_DIR
+  --no-web-deps           Não roda npm install em $PROJECT_DIR/web
+  --no-py-deps            Não instala deps Python do Garmin
+  --no-cron               Não cria /etc/cron.d/ultra-coach
+  --no-start-web          Não inicia o webserver
 EOF
 }
 
 parse_args() {
   while [[ $# -gt 0 ]]; do
     case "$1" in
-      --with-garmin-grafana) DO_GG=1; shift ;;
       --no-symlinks) DO_SYMLINKS=0; shift ;;
       --no-fit-deps) DO_FIT_DEPS=0; shift ;;
+      --no-web-deps) DO_WEB_DEPS=0; shift ;;
+      --no-py-deps) DO_PY_DEPS=0; shift ;;
+      --no-cron) DO_CRON=0; shift ;;
+      --no-start-web) DO_START_WEB=0; shift ;;
       -h|--help) usage; exit 0 ;;
       *) die "Opção desconhecida: $1 (use --help)" ;;
     esac
   done
 }
 
+is_repo_dir() {
+  [[ -f "$PROJECT_DIR/bin/run_coach_daily.sh" && -f "$PROJECT_DIR/sql/schema.sql" ]]
+}
+
+ensure_core_deps() {
+  if command -v apt-get >/dev/null 2>&1; then
+    log "Instalando dependências base via apt-get..."
+    apt-get update -y
+    apt-get install -y git curl jq sqlite3 python3 python3-pip nodejs npm
+  elif command -v dnf >/dev/null 2>&1; then
+    log "Instalando dependências base via dnf..."
+    dnf install -y git curl jq sqlite python3 python3-pip nodejs npm
+  elif command -v yum >/dev/null 2>&1; then
+    log "Instalando dependências base via yum..."
+    yum install -y git curl jq sqlite python3 python3-pip nodejs npm
+  else
+    warn "Gerenciador de pacotes não identificado. Instale manualmente: git curl jq sqlite3 python3 python3-pip nodejs npm"
+  fi
+}
+
+bootstrap_repo() {
+  if is_repo_dir; then
+    return 0
+  fi
+
+  command -v git >/dev/null 2>&1 || die "git não encontrado."
+
+  log "Bootstrap: clonando repo em $TARGET_DIR..."
+  mkdir -p "$(dirname "$TARGET_DIR")"
+  if [[ -d "$TARGET_DIR/.git" ]]; then
+    git -C "$TARGET_DIR" pull --ff-only || warn "Não consegui atualizar repo existente."
+  else
+    git clone "$REPO_URL" "$TARGET_DIR"
+  fi
+
+  log "Reexecutando instalador a partir do repo..."
+  exec env PROJECT_DIR="$TARGET_DIR" "$TARGET_DIR/install.sh" "$@"
+}
+
 ensure_dirs() {
   log "Criando diretórios de dados em $DATA_DIR ..."
-  mkdir -p "$DATA_DIR" "$DATA_DIR/logs" "$DATA_DIR/exports"
+  mkdir -p "$DATA_DIR" "$DATA_DIR/logs" "$DATA_DIR/exports" "$DATA_DIR/backups"
   chmod 0755 "$DATA_DIR" || true
 
   log "Criando diretórios do projeto (se necessário)..."
@@ -88,8 +137,24 @@ ensure_env_file() {
 
   if [[ -f "$ENV_FILE" ]]; then
     log "Env já existe (ok): $ENV_FILE"
+    if ! grep -q "ULTRA_COACH_KEY_PATH" "$ENV_FILE" 2>/dev/null; then
+      local key_user="${SUDO_USER:-}"
+      local key_home="$HOME"
+      if [[ -n "$key_user" && "$key_user" != "root" ]]; then
+        key_home="/home/$key_user"
+      fi
+      local KEY_PATH_DEFAULT="$key_home/.ultra-coach/secret.key"
+      echo "export ULTRA_COACH_KEY_PATH=\"$KEY_PATH_DEFAULT\"" >> "$ENV_FILE"
+    fi
     return 0
   fi
+
+  local key_user="${SUDO_USER:-}"
+  local key_home="$HOME"
+  if [[ -n "$key_user" && "$key_user" != "root" ]]; then
+    key_home="/home/$key_user"
+  fi
+  local KEY_PATH_DEFAULT="$key_home/.ultra-coach/secret.key"
 
   cat > "$ENV_FILE" <<EOF
 # ============================================
@@ -102,25 +167,18 @@ export ULTRA_COACH_DATA_DIR="$DATA_DIR"
 export ULTRA_COACH_DB="$DB_PATH"
 export ULTRA_COACH_PROMPT_FILE="$TEMPLATES_DIR/coach_prompt_ultra.txt"
 export ULTRA_COACH_FIT_DIR="$FIT_DIR"
+export ULTRA_COACH_KEY_PATH="$KEY_PATH_DEFAULT"
 # export ULTRA_COACH_BACKUP_DIR="$DATA_DIR/backups"  # diretorio de backups
 
 # Atleta (default: zz)
 # export ATHLETE="zz"
 
-# OpenAI
-# export OPENAI_API_KEY="..."
-# export MODEL="gpt-5"
+# Web (opcional)
+# export PORT="8080"
+# export WEB_USER=""
+# export WEB_PASS=""
 
-# InfluxDB (fonte de dados Garmin)
-# export INFLUX_URL="http://192.168.20.115:8086/query"
-# export INFLUX_DB="GarminStats"
-
-# Telegram (para enviar .fit como documento)
-# export TELEGRAM_BOT_TOKEN="..."
-# export TELEGRAM_CHAT_ID="..."
-
-# Webhook n8n (notificações)
-# export WEBHOOK_URL="https://n8n.zanardizz.uk/webhook/coach/inbox"
+# Segredos sao configurados via wizard web (armazenados no SQLite criptografado)
 EOF
 
   chmod 0640 "$ENV_FILE" || true
@@ -130,7 +188,7 @@ EOF
 ensure_symlinks() {
   [[ "$DO_SYMLINKS" -eq 1 ]] || { log "Pulando symlinks (--no-symlinks)."; return 0; }
 
-  local scripts=("run_coach_daily.sh" "push_coach_message.sh" "sync_influx_to_sqlite.sh" "init_db.sh" "backup_db.sh")
+  local scripts=("run_coach_daily.sh" "push_coach_message.sh" "sync_influx_to_sqlite.sh" "init_db.sh" "backup_db.sh" "setup_athlete.sh" "dashboard.sh" "garmin_sync.sh")
 
   for s in "${scripts[@]}"; do
     local src="$BIN_DIR/$s"
@@ -166,40 +224,27 @@ ensure_fit_deps() {
   log "Deps FIT OK."
 }
 
-install_garmin_grafana() {
-  [[ "$DO_GG" -eq 1 ]] || return 0
-
-  log "Instalando/Ajudando com garmin-grafana..."
-  log "Repo: $GARMINGRAFANA_REPO"
-  log "Destino: $GARMINGRAFANA_DIR"
-
-  command -v git >/dev/null 2>&1 || die "git não encontrado."
-
-  if [[ -d "$GARMINGRAFANA_DIR/.git" ]]; then
-    log "Repo já existe. Atualizando..."
-    git -C "$GARMINGRAFANA_DIR" pull --ff-only || warn "Não consegui atualizar (talvez alterações locais)."
-  else
-    mkdir -p "$(dirname "$GARMINGRAFANA_DIR")"
-    git clone "$GARMINGRAFANA_REPO" "$GARMINGRAFANA_DIR"
+ensure_web_deps() {
+  [[ "$DO_WEB_DEPS" -eq 1 ]] || { log "Pulando deps web (--no-web-deps)."; return 0; }
+  if [[ ! -f "$PROJECT_DIR/web/package.json" ]]; then
+    warn "Web não encontrada em $PROJECT_DIR/web (pulando)."
+    return 0
   fi
+  command -v node >/dev/null 2>&1 || die "node não encontrado. Instale Node.js >= 18."
+  command -v npm  >/dev/null 2>&1 || die "npm não encontrado. Instale npm."
+  log "Instalando deps web em $PROJECT_DIR/web ..."
+  cd "$PROJECT_DIR/web"
+  npm install --silent
+  log "Deps web OK."
+}
 
-  cat <<'EOF'
-
-[install] Próximos passos do garmin-grafana (não vou executar automaticamente):
-- O garmin-grafana é um stack que busca dados do Garmin e popula InfluxDB, com dashboards no Grafana.
-  Documentação no repo: https://github.com/arpanghosh8453/garmin-grafana :contentReference[oaicite:1]{index=1}
-
-- Ele usa variáveis como FETCH_SELECTION para escolher quais métricas buscar. :contentReference[oaicite:2]{index=2}
-
-Sugestão prática no seu cenário:
-1) Garanta que seu InfluxDB (v1.1) esteja acessível e com bucket/org/token corretos.
-2) Configure o garmin-grafana para escrever no mesmo Influx que você já usa.
-3) Só depois ligue o cron do coach diário.
-
-Se você quiser, a gente integra o coach para:
-- ler direto do InfluxDB (consulta do treino do dia / métricas)
-- ou ler do export gerado pelo garmin-grafana
-EOF
+ensure_python_deps() {
+  [[ "$DO_PY_DEPS" -eq 1 ]] || { log "Pulando deps Python (--no-py-deps)."; return 0; }
+  command -v python3 >/dev/null 2>&1 || die "python3 não encontrado."
+  command -v pip3 >/dev/null 2>&1 || die "pip3 não encontrado."
+  log "Instalando deps Python (garminconnect, garth, influxdb)..."
+  python3 -m pip install --upgrade pip --quiet || true
+  python3 -m pip install garminconnect garth influxdb --quiet
 }
 
 init_database() {
@@ -224,6 +269,58 @@ init_database() {
     log "Banco inicializado com sucesso."
   else
     warn "Falha ao inicializar banco. Verifique manualmente."
+  fi
+
+  if "$init_script" --migrate; then
+    log "Migrations aplicadas."
+  else
+    warn "Falha ao aplicar migrations."
+  fi
+}
+
+ensure_cron() {
+  [[ "$DO_CRON" -eq 1 ]] || { log "Pulando cron (--no-cron)."; return 0; }
+
+  log "Configurando cron em /etc/cron.d/ultra-coach ..."
+  cat > /etc/cron.d/ultra-coach <<EOF
+# Ultra Coach - Crontab
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+
+# Coach diario as 5h (horario local)
+0 5 * * * root source /etc/ultra-coach/env && /usr/local/bin/run_coach_daily.sh >> $DATA_DIR/logs/coach.log 2>&1
+
+# Backup comprimido a cada 6 horas (mantem 14 dias)
+0 */6 * * * root /usr/local/bin/backup_db.sh --compress --keep 56 >> $DATA_DIR/logs/backup.log 2>&1
+
+# Sync InfluxDB a cada 2 horas (dados frescos)
+0 */2 * * * root source /etc/ultra-coach/env && /usr/local/bin/sync_influx_to_sqlite.sh >> $DATA_DIR/logs/sync.log 2>&1
+
+# Garmin -> Influx (sem Docker)
+0 */2 * * * root source /etc/ultra-coach/env && /usr/local/bin/garmin_sync.sh >> $DATA_DIR/logs/garmin.log 2>&1
+
+# Limpeza de logs antigos (mantem 30 dias)
+0 3 * * 0 root find $DATA_DIR/logs -name "*.log" -mtime +30 -delete
+
+# Ultra Coach Web (auto-start)
+@reboot root source /etc/ultra-coach/env && cd $PROJECT_DIR/web && /usr/bin/env node app.js >> $DATA_DIR/logs/web.log 2>&1
+EOF
+
+  chmod 0644 /etc/cron.d/ultra-coach || true
+}
+
+start_web() {
+  [[ "$DO_START_WEB" -eq 1 ]] || { log "Pulando start web (--no-start-web)."; return 0; }
+  if [[ -f "$PROJECT_DIR/web/app.js" ]]; then
+    log "Iniciando webserver (background)..."
+    source "$ENV_FILE" 2>/dev/null || true
+    local node_bin
+    node_bin="$(command -v node || true)"
+    if [[ -n "$node_bin" ]]; then
+      nohup "$node_bin" "$PROJECT_DIR/web/app.js" >> "$DATA_DIR/logs/web.log" 2>&1 &
+    else
+      warn "node não encontrado (web não iniciado)."
+    fi
   fi
 }
 
@@ -250,17 +347,23 @@ smoke_test() {
 
   log "Para rodar usando env central:"
   echo "  source $ENV_FILE && /usr/local/bin/run_coach_daily.sh"
+  log "Web: http://localhost:8080 (ou PORT em $ENV_FILE)"
 }
 
 main() {
   parse_args "$@"
   need_root
+  ensure_core_deps
+  bootstrap_repo "$@"
   ensure_dirs
   ensure_env_file
   ensure_symlinks
   ensure_fit_deps
+  ensure_web_deps
+  ensure_python_deps
   init_database
-  install_garmin_grafana
+  ensure_cron
+  start_web
   smoke_test
 
   log "Instalação concluída."

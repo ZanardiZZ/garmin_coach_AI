@@ -14,6 +14,12 @@ log_info()  { echo "[$(date -Iseconds)][push][INFO] $*"; }
 log_warn()  { echo "[$(date -Iseconds)][push][WARN] $*" >&2; }
 log_err()   { echo "[$(date -Iseconds)][push][ERR] $*" >&2; }
 
+# shellcheck disable=SC1091
+source /etc/ultra-coach/env 2>/dev/null || true
+if command -v node >/dev/null 2>&1 && [ -f "$ULTRA_COACH_PROJECT_DIR/bin/config_env.mjs" ]; then
+  eval "$(node "$ULTRA_COACH_PROJECT_DIR/bin/config_env.mjs")"
+fi
+
 DB="$ULTRA_COACH_DB"
 ATHLETE="${ATHLETE:-zz}"
 PLAN_DATE="$(date -I)"  # YYYY-MM-DD

@@ -22,6 +22,17 @@ CREATE TABLE IF NOT EXISTS athlete_profile (
 );
 
 -- ============================================
+-- TABELA: config_kv
+-- Configuracoes (valores criptografados)
+-- ============================================
+CREATE TABLE IF NOT EXISTS config_kv (
+  key TEXT PRIMARY KEY,
+  value_enc TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT
+);
+
+-- ============================================
 -- TABELA: coach_policy
 -- Politicas de treino por modo (conservative, moderate, aggressive)
 -- ============================================

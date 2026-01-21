@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="pt-br">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Ultra Coach - Setup</title>
+    <link rel="stylesheet" href="/public/style.css" />
+  </head>
+  <body>
+    <div class="bg-grid"></div>
+    <header class="header">
+      <div class="brand">
+        <div class="brand-mark">UC</div>
+        <div class="brand-text">
+          <div class="brand-title">Ultra Coach</div>
+          <div class="brand-sub">Configuracao inicial</div>
+        </div>
+      </div>
+      <a class="btn" href="/">Dashboard</a>
+    </header>
+
+    <main class="grid">
+      <section class="card">
+        <div class="card-title">Credenciais</div>
+        <form class="form" method="post" action="/setup">
+          <div class="form-group">
+            <label>OpenAI API Key</label>
+            <input name="openai_api_key" type="password" value="<%= config.OPENAI_API_KEY || '' %>" />
+          </div>
+          <div class="form-group">
+            <label>Modelo</label>
+            <input name="model" type="text" value="<%= config.MODEL || 'gpt-5' %>" />
+          </div>
+          <div class="form-group">
+            <label>Influx URL</label>
+            <input name="influx_url" type="text" value="<%= config.INFLUX_URL || '' %>" />
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Influx DB</label>
+              <input name="influx_db" type="text" value="<%= config.INFLUX_DB || '' %>" />
+            </div>
+            <div class="form-group">
+              <label>Influx User</label>
+              <input name="influx_user" type="text" value="<%= config.INFLUX_USER || '' %>" />
+            </div>
+            <div class="form-group">
+              <label>Influx Pass</label>
+              <input name="influx_pass" type="password" value="<%= config.INFLUX_PASS || '' %>" />
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Telegram Token</label>
+              <input name="telegram_token" type="password" value="<%= config.TELEGRAM_BOT_TOKEN || '' %>" />
+            </div>
+            <div class="form-group">
+              <label>Telegram Chat ID</label>
+              <input name="telegram_chat_id" type="text" value="<%= config.TELEGRAM_CHAT_ID || '' %>" />
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Webhook URL</label>
+            <input name="webhook_url" type="text" value="<%= config.WEBHOOK_URL || '' %>" />
+          </div>
+          <div class="card-title">Garmin Connect</div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Garmin Email</label>
+              <input name="garmin_email" type="email" value="<%= config.GARMINCONNECT_EMAIL || '' %>" />
+            </div>
+            <div class="form-group">
+              <label>Garmin Password</label>
+              <input name="garmin_password" type="password" value="<%= config.GARMINCONNECT_PASSWORD || '' %>" />
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Garmin China Account</label>
+              <select name="garmin_is_cn">
+                <option value="false" <%= config.GARMINCONNECT_IS_CN === 'false' ? 'selected' : '' %>>nao</option>
+                <option value="true" <%= config.GARMINCONNECT_IS_CN === 'true' ? 'selected' : '' %>>sim</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Token Dir</label>
+              <input name="garmin_token_dir" type="text" value="<%= config.GARMIN_TOKEN_DIR || '~/.ultra-coach/garminconnect' %>" />
+            </div>
+            <div class="form-group">
+              <label>Sync Days</label>
+              <input name="garmin_sync_days" type="number" min="1" max="365" value="<%= config.GARMIN_SYNC_DAYS || 7 %>" />
+            </div>
+          </div>
+
+          <div class="card-title">Atletas</div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Quantidade de atletas</label>
+              <input id="athlete-count" name="athlete_count" type="number" min="1" max="10" value="<%= Math.max(athletes.length, 1) %>" />
+            </div>
+          </div>
+
+          <div id="athletes"></div>
+
+          <button class="btn primary" type="submit">Salvar configuracao</button>
+        </form>
+      </section>
+    </main>
+
+    <script>
+      const athletes = <%- JSON.stringify(athletes || []) %>;
+      const container = document.getElementById('athletes');
+      const countInput = document.getElementById('athlete-count');
+
+      function renderAthletes() {
+        const count = Math.max(1, Number(countInput.value || 1));
+        container.innerHTML = '';
+        for (let i = 0; i < count; i += 1) {
+          const a = athletes[i] || {};
+          const idx = i + 1;
+          const block = document.createElement('div');
+          block.className = 'athlete-block';
+          block.innerHTML = `
+            <div class="form-row">
+              <div class="form-group">
+                <label>Athlete ID</label>
+                <input name="athlete_id_${idx}" type="text" value="${a.athlete_id || ''}" required />
+              </div>
+              <div class="form-group">
+                <label>Nome</label>
+                <input name="name_${idx}" type="text" value="${a.name || ''}" required />
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>FC max</label>
+                <input name="hr_max_${idx}" type="number" min="100" max="230" value="${a.hr_max || ''}" required />
+              </div>
+              <div class="form-group">
+                <label>FC repouso</label>
+                <input name="hr_rest_${idx}" type="number" min="30" max="100" value="${a.hr_rest || 50}" />
+              </div>
+              <div class="form-group">
+                <label>Coach mode</label>
+                <select name="coach_mode_${idx}">
+                  <option value="conservative" ${a.coach_mode === 'conservative' ? 'selected' : ''}>conservative</option>
+                  <option value="moderate" ${!a.coach_mode || a.coach_mode === 'moderate' ? 'selected' : ''}>moderate</option>
+                  <option value="aggressive" ${a.coach_mode === 'aggressive' ? 'selected' : ''}>aggressive</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Objetivo</label>
+                <input name="goal_${idx}" type="text" value="${a.goal_event || ''}" />
+              </div>
+              <div class="form-group">
+                <label>Horas/semana</label>
+                <input name="weekly_hours_${idx}" type="number" step="0.5" min="0" value="${a.weekly_hours_target || ''}" />
+              </div>
+            </div>
+          `;
+          container.appendChild(block);
+        }
+      }
+
+      countInput.addEventListener('input', renderAthletes);
+      renderAthletes();
+    </script>
+  </body>
+</html>

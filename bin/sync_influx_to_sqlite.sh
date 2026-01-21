@@ -2,8 +2,15 @@
 set -euo pipefail
 
 # ---------- Config ----------
+: "${ULTRA_COACH_PROJECT_DIR:=/opt/ultra-coach}"
 : "${ULTRA_COACH_DB:=/var/lib/ultra-coach/coach.sqlite}"
 : "${ATHLETE_ID:=zz}"
+
+# shellcheck disable=SC1091
+source /etc/ultra-coach/env 2>/dev/null || true
+if command -v node >/dev/null 2>&1 && [ -f "$ULTRA_COACH_PROJECT_DIR/bin/config_env.mjs" ]; then
+  eval "$(node "$ULTRA_COACH_PROJECT_DIR/bin/config_env.mjs")"
+fi
 
 INFLUX_URL="${INFLUX_URL:-http://192.168.20.115:8086/query}"
 INFLUX_DB="${INFLUX_DB:-GarminStats}"
@@ -45,6 +52,23 @@ query_influx() {
   [[ -n "$INFLUX_USER" ]] && args+=( --data-urlencode "u=$INFLUX_USER" )
   [[ -n "$INFLUX_PASS" ]] && args+=( --data-urlencode "p=$INFLUX_PASS" )
   curl "${args[@]}"
+}
+
+extract_influx_error() {
+  local payload="$1"
+  echo "$payload" | jq -r 'if .error then .error elif (.results[0]?.error) then .results[0].error else empty end'
+}
+
+ensure_influx_response() {
+  local payload="$1"
+  local stage="$2"
+  local err
+  err="$(extract_influx_error "$payload")"
+  if [[ -n "$err" ]]; then
+    log_err "Influx [$stage] retornou erro: $err"
+    return 1
+  fi
+  return 0
 }
 
 # Converte timestamp UTC Z -> local "YYYY-MM-DD HH:MM:SS"
@@ -123,27 +147,40 @@ FROM "$MEAS"
 WHERE time > now() - ${SYNC_DAYS}d
   AND "activityType" = 'running'
   AND "activityName" != 'END'
-  AND "averageHR" IS NOT NULL
-  AND "distance" IS NOT NULL
 ORDER BY time DESC
 LIMIT ${LIMIT_ROWS}
 SQL
 )
 
 json="$(query_influx "$Q")"
+if ! ensure_influx_response "$json" "running activities"; then
+  exit 2
+fi
 
 # ---------- Parse ----------
-series_exists="$(echo "$json" | jq -r '.results[0].series[0]?.name // empty')"
+series_exists="$(echo "$json" | jq -r '
+  def first_series:
+    (.results[0].series? // null)
+    | if type=="array" then .[0]
+      elif type=="object" then .
+      else empty end;
+  first_series | .name // empty
+')"
 if [[ -z "$series_exists" ]]; then
   log "Nada para importar (sem series)."
 else
   # columns map
   # values: [time, activityName, activityType, averageHR, ...]
   rows="$(echo "$json" | jq -c '
-    .results[0].series[0] as $s
+    def first_series:
+      (.results[0].series? // null)
+      | if type=="array" then .[0]
+        elif type=="object" then .
+        else empty end;
+    first_series as $s
     | ($s.columns) as $c
-    | $s.values[]
-    | reduce range(0; ($c|length)) as $i ({}; . + { ($c[$i]): .[$i] })
+    | $s.values[] as $row
+    | reduce range(0; ($c|length)) as $i ({}; . + { ($c[$i]): $row[$i] })
   ')"
 
   imported=0
@@ -254,14 +291,29 @@ SQL
 )
 
 json_body="$(query_influx "$Q_BODY")"
+if ! ensure_influx_response "$json_body" "body composition"; then
+  exit 3
+fi
 
-series_body="$(echo "$json_body" | jq -r '.results[0].series[0]?.name // empty')"
+series_body="$(echo "$json_body" | jq -r '
+  def first_series:
+    (.results[0].series? // null)
+    | if type=="array" then .[0]
+      elif type=="object" then .
+      else empty end;
+  first_series | .name // empty
+')"
 if [[ -n "$series_body" ]]; then
   rows_body="$(echo "$json_body" | jq -c '
-    .results[0].series[0] as $s
+    def first_series:
+      (.results[0].series? // null)
+      | if type=="array" then .[0]
+        elif type=="object" then .
+        else empty end;
+    first_series as $s
     | ($s.columns) as $c
-    | $s.values[]
-    | reduce range(0; ($c|length)) as $i ({}; . + { ($c[$i]): .[$i] })
+    | $s.values[] as $row
+    | reduce range(0; ($c|length)) as $i ({}; . + { ($c[$i]): $row[$i] })
   ')"
 
   imported_body=0

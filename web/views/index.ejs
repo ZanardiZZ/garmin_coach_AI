@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="pt-br">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Ultra Coach - Dashboard</title>
+    <link rel="stylesheet" href="/public/style.css" />
+  </head>
+  <body>
+    <div class="bg-grid"></div>
+    <header class="header">
+      <div class="brand">
+        <div class="brand-mark">UC</div>
+        <div class="brand-text">
+          <div class="brand-title">Ultra Coach</div>
+          <div class="brand-sub">Dashboard do atleta</div>
+        </div>
+      </div>
+      <a class="btn" href="<%= setupUrl %>">Configuracao</a>
+      <div class="athlete">
+        <div class="athlete-name"><%= name %></div>
+        <div class="athlete-meta"><%= athlete_id %> · <%= goal_event || "Objetivo n/a" %></div>
+      </div>
+    </header>
+
+    <main class="grid">
+      <section class="card">
+        <div class="card-title">Estado Atual</div>
+        <div class="metric">
+          <div class="metric-label">Readiness</div>
+          <div class="metric-value"><%= Math.round(readiness) %>/100</div>
+          <div class="bar"><div class="fill" style="width: <%= Math.min(readiness, 100) %>%"></div></div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Fatigue</div>
+          <div class="metric-value"><%= Math.round(fatigue) %>/100</div>
+          <div class="bar bar-warn"><div class="fill" style="width: <%= Math.min(fatigue, 100) %>%"></div></div>
+        </div>
+        <div class="pill">Coach mode: <%= coach_mode || "n/a" %></div>
+      </section>
+
+      <section class="card">
+        <div class="card-title">Semana Atual</div>
+        <div class="stat-row">
+          <div class="stat">
+            <div class="stat-label">Distancia</div>
+            <div class="stat-value"><%= weekly.dist_km.toFixed(1) %> km</div>
+          </div>
+          <div class="stat">
+            <div class="stat-label">Tempo</div>
+            <div class="stat-value"><%= Math.floor(weekly.time_min / 60) %>h <%= Math.round(weekly.time_min % 60) %>m</div>
+          </div>
+        </div>
+        <div class="stat-row">
+          <div class="stat">
+            <div class="stat-label">TRIMP</div>
+            <div class="stat-value"><%= Math.round(weekly.load) %></div>
+          </div>
+          <div class="stat">
+            <div class="stat-label">Quality / Long</div>
+            <div class="stat-value"><%= weekly.q_days %> / <%= weekly.l_days %></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-title">Ultima Atividade</div>
+        <% if (last.last_at) { %>
+          <div class="list">
+            <div><span>Data</span><strong><%= last.last_at %></strong></div>
+            <div><span>Distancia</span><strong><%= Number(last.last_dist || 0).toFixed(1) %> km</strong></div>
+            <div><span>Duracao</span><strong><%= Math.round(Number(last.last_dur || 0)) %> min</strong></div>
+            <div><span>FC media</span><strong><%= Math.round(Number(last.last_hr || 0)) %> bpm</strong></div>
+            <div><span>Tags</span><strong><%= last.last_tags || "n/a" %></strong></div>
+          </div>
+        <% } else { %>
+          <div class="muted">n/a</div>
+        <% } %>
+      </section>
+
+      <section class="card highlight">
+        <div class="card-title">Treino de Hoje</div>
+        <% if (today.plan_date) { %>
+          <div class="today-title"><%= today.workout_title || "Treino" %></div>
+          <div class="list">
+            <div><span>Tipo</span><strong><%= today.workout_type || "n/a" %></strong></div>
+            <div><span>Duracao</span><strong><%= Math.round(Number(today.duration_min || 0)) %> min</strong></div>
+            <div><span>Status IA</span><strong><%= today.ai_status || "n/a" %></strong></div>
+          </div>
+        <% } else { %>
+          <div class="muted">n/a</div>
+        <% } %>
+      </section>
+
+      <section class="card">
+        <div class="card-title">Planos IA (30 dias)</div>
+        <div class="stat-row">
+          <div class="stat">
+            <div class="stat-label">Aceitos</div>
+            <div class="stat-value"><%= compliance.ok %>/<%= compliance.total %></div>
+          </div>
+          <div class="stat">
+            <div class="stat-label">Rejeitados</div>
+            <div class="stat-value"><%= compliance.rej %></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-title">Long Runs (ultimos 4)</div>
+        <% if (longRuns.length) { %>
+          <div class="long-list">
+            <% longRuns.forEach((r) => { %>
+              <div class="long-item">
+                <div class="long-date"><%= r.date %></div>
+                <div class="long-km"><%= Number(r.km || 0).toFixed(1) %> km</div>
+              </div>
+            <% }) %>
+          </div>
+        <% } else { %>
+          <div class="muted">n/a</div>
+        <% } %>
+      </section>
+    </main>
+  </body>
+</html>

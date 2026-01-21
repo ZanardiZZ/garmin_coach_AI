@@ -205,6 +205,12 @@ GARMIN_FETCH_ACTIVITY_DETAILS=true
 - Dashboard: `http://<host>:8080/` for status + weekly view.
 - Activities: `http://<host>:8080/activities` and `/activity/:id` for maps and charts.
 
+## Versioning & Changelog
+
+- Current version lives in `VERSION`; changelog in `CHANGELOG.md`.
+- Use `bin/release.sh patch|minor|major` to bump, update changelog, and sync package versions.
+- Optional tag: `bin/release.sh 0.2.1 --tag`.
+
 ## Key Design Principles
 
 1. **Idempotency**: All scripts can be re-run safely. Database inserts use `INSERT OR REPLACE` / `ON CONFLICT` / `WHERE NOT EXISTS`.

@@ -6,7 +6,7 @@
 - `fit/`: FIT workout generator (Node.js) and tests.
 - `sql/`: SQLite schema and migrations.
 - `templates/`: Prompt templates and coach text assets.
-- `tests/`: BATS/Vitest suites with fixtures and helpers.
+- `tests/`: BATS/Vitest suites with fixtures.
 - System data lives in `/var/lib/ultra-coach` and config in `/etc/ultra-coach/env`.
 
 ## Build, Test, and Development Commands
@@ -19,6 +19,7 @@
 - `ATHLETE_ID=zz /opt/ultra-coach/bin/sync_influx_to_sqlite.sh`: sync Garmin/Influx into SQLite.
 - `/opt/ultra-coach/bin/garmin_sync.sh`: Garmin Connect → InfluxDB (ActivityGPS when enabled).
 - `http://<host>:8080/setup`: web wizard for config and athletes.
+- `bin/release.sh patch`: bumps `VERSION`, updates `CHANGELOG.md`, and syncs package versions.
 
 ## Coding Style & Naming Conventions
 - Bash: use `set -euo pipefail`, prefer `#!/usr/bin/env bash`, and run `shellcheck`.

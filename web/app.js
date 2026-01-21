@@ -233,6 +233,9 @@ app.post('/setup', async (req, res) => {
       GARMINCONNECT_IS_CN: req.body.garmin_is_cn || 'false',
       GARMIN_TOKEN_DIR: req.body.garmin_token_dir || '',
       GARMIN_SYNC_DAYS: req.body.garmin_sync_days || '7',
+      WEEKLY_SUMMARY_DAY: req.body.weekly_summary_day || '1',
+      WEEKLY_SUMMARY_TIME: req.body.weekly_summary_time || '07:00',
+      WEEKLY_SUMMARY_TZ: req.body.weekly_summary_tz || 'America/Sao_Paulo',
       ATHLETE: athletes.length === 1 ? athletes[0].athlete_id : ATHLETE_DEFAULT,
     });
 

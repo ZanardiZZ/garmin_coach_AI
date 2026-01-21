@@ -90,13 +90,13 @@ ensure_core_deps() {
   if command -v apt-get >/dev/null 2>&1; then
     log "Instalando dependências base via apt-get..."
     apt-get update -y
-    apt-get install -y git curl jq sqlite3 python3 python3-pip nodejs npm
+    apt-get install -y git curl jq sqlite3 python3 python3-venv python3-pip nodejs npm
   elif command -v dnf >/dev/null 2>&1; then
     log "Instalando dependências base via dnf..."
-    dnf install -y git curl jq sqlite python3 python3-pip nodejs npm
+    dnf install -y git curl jq sqlite python3 python3-pip python3-virtualenv nodejs npm
   elif command -v yum >/dev/null 2>&1; then
     log "Instalando dependências base via yum..."
-    yum install -y git curl jq sqlite python3 python3-pip nodejs npm
+    yum install -y git curl jq sqlite python3 python3-pip python3-virtualenv nodejs npm
   else
     warn "Gerenciador de pacotes não identificado. Instale manualmente: git curl jq sqlite3 python3 python3-pip nodejs npm"
   fi
@@ -188,7 +188,7 @@ EOF
 ensure_symlinks() {
   [[ "$DO_SYMLINKS" -eq 1 ]] || { log "Pulando symlinks (--no-symlinks)."; return 0; }
 
-  local scripts=("run_coach_daily.sh" "push_coach_message.sh" "sync_influx_to_sqlite.sh" "init_db.sh" "backup_db.sh" "setup_athlete.sh" "dashboard.sh" "garmin_sync.sh")
+  local scripts=("run_coach_daily.sh" "push_coach_message.sh" "sync_influx_to_sqlite.sh" "init_db.sh" "backup_db.sh" "setup_athlete.sh" "dashboard.sh" "garmin_sync.sh" "send_weekly_plan.sh")
 
   for s in "${scripts[@]}"; do
     local src="$BIN_DIR/$s"
@@ -241,10 +241,15 @@ ensure_web_deps() {
 ensure_python_deps() {
   [[ "$DO_PY_DEPS" -eq 1 ]] || { log "Pulando deps Python (--no-py-deps)."; return 0; }
   command -v python3 >/dev/null 2>&1 || die "python3 não encontrado."
-  command -v pip3 >/dev/null 2>&1 || die "pip3 não encontrado."
-  log "Instalando deps Python (garminconnect, garth, influxdb)..."
-  python3 -m pip install --upgrade pip --quiet || true
-  python3 -m pip install garminconnect garth influxdb --quiet
+  command -v python3 >/dev/null 2>&1 || die "python3-venv não encontrado."
+  local venv_dir="$PROJECT_DIR/.venv"
+  if [[ ! -d "$venv_dir" ]]; then
+    log "Criando venv Python em $venv_dir ..."
+    python3 -m venv "$venv_dir"
+  fi
+  log "Instalando deps Python no venv (garminconnect, garth, influxdb)..."
+  "$venv_dir/bin/pip" install --upgrade pip --quiet || true
+  "$venv_dir/bin/pip" install garminconnect garth influxdb --quiet
 }
 
 init_database() {
@@ -298,6 +303,9 @@ PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 
 # Garmin -> Influx (sem Docker)
 0 */2 * * * root source /etc/ultra-coach/env && /usr/local/bin/garmin_sync.sh >> $DATA_DIR/logs/garmin.log 2>&1
+
+# Resumo semanal (verifica horario configurado no painel)
+*/5 * * * * root source /etc/ultra-coach/env && /usr/local/bin/send_weekly_plan.sh >> $DATA_DIR/logs/weekly.log 2>&1
 
 # Limpeza de logs antigos (mantem 30 dias)
 0 3 * * 0 root find $DATA_DIR/logs -name "*.log" -mtime +30 -delete

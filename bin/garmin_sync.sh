@@ -9,4 +9,9 @@ if command -v node >/dev/null 2>&1 && [ -f "$ULTRA_COACH_PROJECT_DIR/bin/config_
   eval "$(node "$ULTRA_COACH_PROJECT_DIR/bin/config_env.mjs")"
 fi
 
+VENV_PY="$ULTRA_COACH_PROJECT_DIR/.venv/bin/python"
+if [[ -x "$VENV_PY" ]]; then
+  exec "$VENV_PY" "$ULTRA_COACH_PROJECT_DIR/bin/garmin_sync.py"
+fi
+
 exec "$ULTRA_COACH_PROJECT_DIR/bin/garmin_sync.py"

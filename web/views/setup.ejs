@@ -22,7 +22,7 @@
     <main class="grid">
       <section class="card">
         <div class="card-title">Credenciais</div>
-        <form class="form" method="post" action="/setup">
+        <form id="setup-form" class="form" method="post" action="/setup">
           <div class="form-group">
             <label>OpenAI API Key</label>
             <input name="openai_api_key" type="password" value="<%= config.OPENAI_API_KEY || '' %>" />
@@ -104,6 +104,31 @@
 
           <button class="btn primary" type="submit">Salvar configuracao</button>
         </form>
+      </section>
+      <section class="card">
+        <div class="card-title">Resumo Semanal</div>
+        <div class="form-group">
+          <label>Dia da semana para enviar</label>
+          <select name="weekly_summary_day" form="setup-form">
+            <option value="1" <%= config.WEEKLY_SUMMARY_DAY === '1' ? 'selected' : '' %>>segunda</option>
+            <option value="2" <%= config.WEEKLY_SUMMARY_DAY === '2' ? 'selected' : '' %>>terca</option>
+            <option value="3" <%= config.WEEKLY_SUMMARY_DAY === '3' ? 'selected' : '' %>>quarta</option>
+            <option value="4" <%= config.WEEKLY_SUMMARY_DAY === '4' ? 'selected' : '' %>>quinta</option>
+            <option value="5" <%= config.WEEKLY_SUMMARY_DAY === '5' ? 'selected' : '' %>>sexta</option>
+            <option value="6" <%= config.WEEKLY_SUMMARY_DAY === '6' ? 'selected' : '' %>>sabado</option>
+            <option value="7" <%= config.WEEKLY_SUMMARY_DAY === '7' ? 'selected' : '' %>>domingo</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Horario (HH:MM)</label>
+            <input name="weekly_summary_time" form="setup-form" type="text" value="<%= config.WEEKLY_SUMMARY_TIME || '07:00' %>" />
+          </div>
+          <div class="form-group">
+            <label>Fuso horario</label>
+            <input name="weekly_summary_tz" form="setup-form" type="text" value="<%= config.WEEKLY_SUMMARY_TZ || 'America/Sao_Paulo' %>" />
+          </div>
+        </div>
       </section>
     </main>
 

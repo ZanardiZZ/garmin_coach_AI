@@ -93,7 +93,8 @@ Variaveis (salvas via wizard):
 
 Dependencias Python:
 ```bash
-python3 -m pip install garminconnect influxdb garth
+python3 -m venv /opt/ultra-coach/.venv
+/opt/ultra-coach/.venv/bin/pip install garminconnect influxdb garth
 ```
 
 Creditos: https://github.com/arpanghosh8453/garmin-grafana (BSD 3-Clause).
@@ -104,6 +105,7 @@ Creditos: https://github.com/arpanghosh8453/garmin-grafana (BSD 3-Clause).
 - `bin/run_coach_daily.sh`: pipeline diario completo
 - `bin/sync_influx_to_sqlite.sh`: importa dados do Influx
 - `bin/garmin_sync.sh`: coleta Garmin -> Influx (sem Docker)
+- `bin/send_weekly_plan.sh`: envia resumo semanal via Telegram
 - `bin/backup_db.sh`: backup e rotacao
 - `bin/push_coach_message.sh`: envia treino via webhook
 - `bin/debug_coach.sh`: utilitarios de debug
@@ -115,6 +117,7 @@ Exemplo de jobs (instalado em `/etc/cron.d/ultra-coach`):
 - sync Influx a cada 2h
 - limpeza de logs semanal
 - webserver no boot (@reboot)
+- resumo semanal a cada 5 min (verifica dia/horario configurado)
 
 ## Web Dashboard
 Stack: Node + Express + EJS.

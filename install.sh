@@ -43,9 +43,42 @@ DO_PY_DEPS=1
 DO_CRON=1
 DO_START_WEB=1
 
+LOG_FILE="${LOG_FILE:-/tmp/ultra-coach-install.log}"
 log()  { echo "[install] $*"; }
 warn() { echo "[install][WARN] $*" >&2; }
 die()  { echo "[install][ERR] $*" >&2; exit 1; }
+
+run_with_spinner() {
+  local is_tty=0
+  [[ -t 1 ]] && is_tty=1
+  "$@" >>"$LOG_FILE" 2>&1 &
+  local pid=$!
+  if [[ "$is_tty" -eq 1 ]]; then
+    local spin='-\|/'
+    local i=0
+    printf " "
+    while kill -0 "$pid" 2>/dev/null; do
+      i=$(( (i + 1) % 4 ))
+      printf "\b%s" "${spin:$i:1}"
+      sleep 0.2
+    done
+    printf "\b"
+  fi
+  wait "$pid"
+  return $?
+}
+
+run_step() {
+  local msg="$1"; shift
+  printf "[install] %s ..." "$msg"
+  if run_with_spinner "$@"; then
+    printf " OK\n"
+  else
+    printf " FAIL\n"
+    warn "Detalhes em $LOG_FILE"
+    return 1
+  fi
+}
 
 need_root() {
   if [[ "${EUID:-$(id -u)}" -ne 0 ]]; then
@@ -88,42 +121,42 @@ is_repo_dir() {
 
 ensure_core_deps() {
   if command -v apt-get >/dev/null 2>&1; then
-    log "Instalando dependências base via apt-get..."
-    apt-get update -y
-    apt-get install -y git curl jq sqlite3 python3 python3-venv python3-pip nodejs npm
+    run_step "Instalando dependencias base (apt-get)" bash -c \
+      "apt-get update -y && apt-get install -y git curl jq sqlite3 python3 python3-venv python3-pip nodejs npm" \
+      || die "Falha ao instalar dependencias base (apt-get)."
   elif command -v dnf >/dev/null 2>&1; then
-    log "Instalando dependências base via dnf..."
-    dnf install -y git curl jq sqlite python3 python3-pip python3-virtualenv nodejs npm
+    run_step "Instalando dependencias base (dnf)" dnf install -y git curl jq sqlite python3 python3-pip python3-virtualenv nodejs npm \
+      || die "Falha ao instalar dependencias base (dnf)."
   elif command -v yum >/dev/null 2>&1; then
-    log "Instalando dependências base via yum..."
-    yum install -y git curl jq sqlite python3 python3-pip python3-virtualenv nodejs npm
+    run_step "Instalando dependencias base (yum)" yum install -y git curl jq sqlite python3 python3-pip python3-virtualenv nodejs npm \
+      || die "Falha ao instalar dependencias base (yum)."
   else
     warn "Gerenciador de pacotes não identificado. Instale manualmente: git curl jq sqlite3 python3 python3-pip nodejs npm"
   fi
 }
 
 ensure_influxdb() {
-  log "Instalando/Iniciando InfluxDB local (v1)..."
+  log "InfluxDB local (v1)..."
   if command -v apt-get >/dev/null 2>&1; then
-    apt-get install -y influxdb || warn "Não consegui instalar influxdb via apt-get."
+    run_step "Instalando InfluxDB (apt-get)" apt-get install -y influxdb || warn "Não consegui instalar influxdb via apt-get."
   elif command -v dnf >/dev/null 2>&1; then
-    dnf install -y influxdb || warn "Não consegui instalar influxdb via dnf."
+    run_step "Instalando InfluxDB (dnf)" dnf install -y influxdb || warn "Não consegui instalar influxdb via dnf."
   elif command -v yum >/dev/null 2>&1; then
-    yum install -y influxdb || warn "Não consegui instalar influxdb via yum."
+    run_step "Instalando InfluxDB (yum)" yum install -y influxdb || warn "Não consegui instalar influxdb via yum."
   else
     warn "Gerenciador de pacotes não identificado. Instale InfluxDB manualmente."
   fi
 
   if command -v systemctl >/dev/null 2>&1; then
-    systemctl enable --now influxdb || true
+    run_step "Iniciando InfluxDB (systemd)" systemctl enable --now influxdb || true
   elif command -v service >/dev/null 2>&1; then
-    service influxdb start || true
+    run_step "Iniciando InfluxDB (service)" service influxdb start || true
   fi
 
   if command -v influx >/dev/null 2>&1; then
-    influx -execute "CREATE DATABASE GarminStats" >/dev/null 2>&1 || true
+    run_step "Criando database GarminStats" influx -execute "CREATE DATABASE GarminStats" || true
   else
-    curl -sS -XPOST "http://localhost:8086/query" --data-urlencode "q=CREATE DATABASE GarminStats" >/dev/null 2>&1 || true
+    run_step "Criando database GarminStats (HTTP)" curl -sS -XPOST "http://localhost:8086/query" --data-urlencode "q=CREATE DATABASE GarminStats" || true
   fi
 }
 
@@ -134,12 +167,12 @@ bootstrap_repo() {
 
   command -v git >/dev/null 2>&1 || die "git não encontrado."
 
-  log "Bootstrap: clonando repo em $TARGET_DIR..."
+  log "Bootstrap: repo $TARGET_DIR"
   mkdir -p "$(dirname "$TARGET_DIR")"
   if [[ -d "$TARGET_DIR/.git" ]]; then
-    git -C "$TARGET_DIR" pull --ff-only || warn "Não consegui atualizar repo existente."
+    run_step "Atualizando repo" git -C "$TARGET_DIR" pull --ff-only || warn "Não consegui atualizar repo existente."
   else
-    git clone "$REPO_URL" "$TARGET_DIR"
+    run_step "Clonando repo" git clone "$REPO_URL" "$TARGET_DIR" || die "Falha ao clonar repo."
   fi
 
   log "Reexecutando instalador a partir do repo..."
@@ -147,17 +180,16 @@ bootstrap_repo() {
 }
 
 ensure_dirs() {
-  log "Criando diretórios de dados em $DATA_DIR ..."
-  mkdir -p "$DATA_DIR" "$DATA_DIR/logs" "$DATA_DIR/exports" "$DATA_DIR/backups"
+  run_step "Criando diretorios de dados" mkdir -p "$DATA_DIR" "$DATA_DIR/logs" "$DATA_DIR/exports" "$DATA_DIR/backups" \
+    || die "Falha ao criar diretorios de dados."
   chmod 0755 "$DATA_DIR" || true
 
-  log "Criando diretórios do projeto (se necessário)..."
-  mkdir -p "$BIN_DIR" "$FIT_DIR" "$TEMPLATES_DIR"
+  run_step "Criando diretorios do projeto" mkdir -p "$BIN_DIR" "$FIT_DIR" "$TEMPLATES_DIR" \
+    || die "Falha ao criar diretorios do projeto."
 }
 
 ensure_env_file() {
-  log "Preparando env central em $ENV_FILE ..."
-  mkdir -p "$ENV_DIR"
+  run_step "Preparando env central" mkdir -p "$ENV_DIR" || die "Falha ao criar $ENV_DIR."
   chmod 0755 "$ENV_DIR" || true
 
   if [[ -f "$ENV_FILE" ]]; then
@@ -248,11 +280,10 @@ ensure_fit_deps() {
   command -v node >/dev/null 2>&1 || die "node não encontrado. Instale Node.js >= 18."
   command -v npm  >/dev/null 2>&1 || die "npm não encontrado. Instale npm."
 
-  log "Instalando deps do conversor FIT em $FIT_DIR ..."
+  log "Deps FIT..."
   cd "$FIT_DIR"
   # Se existir package-lock.json e você quiser reprodutibilidade, troque para: npm ci
-  npm install --silent
-  log "Deps FIT OK."
+  run_step "Instalando deps FIT (npm)" npm install --silent || die "Falha ao instalar deps FIT."
 }
 
 ensure_web_deps() {
@@ -263,10 +294,9 @@ ensure_web_deps() {
   fi
   command -v node >/dev/null 2>&1 || die "node não encontrado. Instale Node.js >= 18."
   command -v npm  >/dev/null 2>&1 || die "npm não encontrado. Instale npm."
-  log "Instalando deps web em $PROJECT_DIR/web ..."
+  log "Deps web..."
   cd "$PROJECT_DIR/web"
-  npm install --silent
-  log "Deps web OK."
+  run_step "Instalando deps web (npm)" npm install --silent || die "Falha ao instalar deps web."
 }
 
 ensure_python_deps() {
@@ -275,16 +305,15 @@ ensure_python_deps() {
   command -v python3 >/dev/null 2>&1 || die "python3-venv não encontrado."
   local venv_dir="$PROJECT_DIR/.venv"
   if [[ ! -d "$venv_dir" ]]; then
-    log "Criando venv Python em $venv_dir ..."
-    python3 -m venv "$venv_dir"
+    run_step "Criando venv Python" python3 -m venv "$venv_dir" || die "Falha ao criar venv Python."
   fi
-  log "Instalando deps Python no venv (garminconnect, garth, influxdb, fitparse)..."
-  "$venv_dir/bin/pip" install --upgrade pip --quiet || true
-  "$venv_dir/bin/pip" install garminconnect garth influxdb fitparse --quiet
+  run_step "Instalando deps Python (pip)" bash -c \
+    "\"$venv_dir/bin/pip\" install --upgrade pip --quiet && \"$venv_dir/bin/pip\" install garminconnect garth influxdb fitparse --quiet" \
+    || die "Falha ao instalar deps Python."
 }
 
 init_database() {
-  log "Inicializando banco de dados..."
+  log "Banco de dados..."
 
   local init_script="$BIN_DIR/init_db.sh"
 
@@ -301,23 +330,14 @@ init_database() {
   export ULTRA_COACH_DATA_DIR="$DATA_DIR"
   export ULTRA_COACH_DB="$DB_PATH"
 
-  if "$init_script"; then
-    log "Banco inicializado com sucesso."
-  else
-    warn "Falha ao inicializar banco. Verifique manualmente."
-  fi
-
-  if "$init_script" --migrate; then
-    log "Migrations aplicadas."
-  else
-    warn "Falha ao aplicar migrations."
-  fi
+  run_step "Inicializando banco" "$init_script" || warn "Falha ao inicializar banco. Verifique manualmente."
+  run_step "Aplicando migrations" "$init_script" --migrate || warn "Falha ao aplicar migrations."
 }
 
 ensure_cron() {
   [[ "$DO_CRON" -eq 1 ]] || { log "Pulando cron (--no-cron)."; return 0; }
 
-  log "Configurando cron em /etc/cron.d/ultra-coach ..."
+  log "Cron..."
   cat > /etc/cron.d/ultra-coach <<EOF
 # Ultra Coach - Crontab
 SHELL=/bin/bash
@@ -392,6 +412,8 @@ smoke_test() {
 main() {
   parse_args "$@"
   need_root
+  : > "$LOG_FILE" 2>/dev/null || true
+  log "Logs: $LOG_FILE"
   ensure_core_deps
   bootstrap_repo "$@"
   ensure_dirs

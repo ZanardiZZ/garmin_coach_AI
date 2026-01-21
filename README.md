@@ -43,9 +43,8 @@ Variaveis principais:
 - `OPENAI_API_KEY` (obrigatorio)
 - `MODEL` (default: gpt-5)
 - `ULTRA_COACH_PROJECT_DIR`, `ULTRA_COACH_DATA_DIR`, `ULTRA_COACH_DB`, `ULTRA_COACH_PROMPT_FILE`, `ULTRA_COACH_FIT_DIR`
-- `INFLUX_URL`, `INFLUX_DB`, `INFLUX_USER`, `INFLUX_PASS` (sync)
-- `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` (envio de FIT)
-- `WEBHOOK_URL` (push_coach_message.sh)
+- `INFLUX_URL`, `INFLUX_DB`, `INFLUX_USER`, `INFLUX_PASS` (sync, defaults locais)
+- `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` (envio via bot)
 
 Exemplo minimo:
 ```bash
@@ -58,14 +57,14 @@ export ULTRA_COACH_FIT_DIR="/opt/ultra-coach/fit"
 export OPENAI_API_KEY="SUA_CHAVE"
 export MODEL="gpt-5"
 
-export INFLUX_URL="http://SEU_INFLUX:8086/query"
+export INFLUX_URL="http://localhost:8086/query"
 export INFLUX_DB="GarminStats"
 export INFLUX_USER=""
 export INFLUX_PASS=""
 
 export TELEGRAM_BOT_TOKEN="SEU_TOKEN"
 export TELEGRAM_CHAT_ID="SEU_CHAT_ID"
-export WEBHOOK_URL="https://seu-n8n/webhook/coach/inbox"
+# WEBHOOK_URL nao e necessario (envio direto via Telegram bot)
 ```
 
 ## Configuracao via Web (preferido)
@@ -144,6 +143,10 @@ export PORT="8080"
 export WEB_USER="seu_usuario"
 export WEB_PASS="sua_senha"
 ```
+
+## InfluxDB local (auto)
+O installer configura um InfluxDB local (v1) e cria o database `GarminStats`,
+deixando o sync transparente para o usuario final.
 
 ## Troubleshooting rapido
 - `OPENAI_API_KEY` ausente: o coach aborta com erro

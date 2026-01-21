@@ -31,24 +31,6 @@
             <label>Modelo</label>
             <input name="model" type="text" value="<%= config.MODEL || 'gpt-5' %>" />
           </div>
-          <div class="form-group">
-            <label>Influx URL</label>
-            <input name="influx_url" type="text" value="<%= config.INFLUX_URL || '' %>" />
-          </div>
-          <div class="form-row">
-            <div class="form-group">
-              <label>Influx DB</label>
-              <input name="influx_db" type="text" value="<%= config.INFLUX_DB || '' %>" />
-            </div>
-            <div class="form-group">
-              <label>Influx User</label>
-              <input name="influx_user" type="text" value="<%= config.INFLUX_USER || '' %>" />
-            </div>
-            <div class="form-group">
-              <label>Influx Pass</label>
-              <input name="influx_pass" type="password" value="<%= config.INFLUX_PASS || '' %>" />
-            </div>
-          </div>
           <div class="form-row">
             <div class="form-group">
               <label>Telegram Token</label>
@@ -58,10 +40,6 @@
               <label>Telegram Chat ID</label>
               <input name="telegram_chat_id" type="text" value="<%= config.TELEGRAM_CHAT_ID || '' %>" />
             </div>
-          </div>
-          <div class="form-group">
-            <label>Webhook URL</label>
-            <input name="webhook_url" type="text" value="<%= config.WEBHOOK_URL || '' %>" />
           </div>
           <div class="card-title">Garmin Connect</div>
           <div class="form-row">

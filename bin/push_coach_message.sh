@@ -23,7 +23,6 @@ fi
 DB="$ULTRA_COACH_DB"
 ATHLETE="${ATHLETE:-zz}"
 PLAN_DATE="$(date -I)"  # YYYY-MM-DD
-WEBHOOK_URL="${WEBHOOK_URL:-https://n8n.zanardizz.uk/webhook/coach/inbox}"
 
 # Mensagem (formatação Telegram Markdown) a partir do ai_workout_json já aceito
 SQL="
@@ -95,12 +94,13 @@ if [ -z "${MESSAGE:-}" ]; then
   MESSAGE="Sem treino IA aceito para hoje (${PLAN_DATE}). Rode o pipeline de geração/validação primeiro."
 fi
 
-# Envia para o n8n (que salva no Data Table e manda no Telegram)
-jq -n \
-  --arg athlete_id "$ATHLETE" \
-  --arg plan_date "$PLAN_DATE" \
-  --arg message "$MESSAGE" \
-  '{athlete_id:$athlete_id, plan_date:$plan_date, message:$message}' \
-| curl -sS -X POST "$WEBHOOK_URL" \
-    -H "Content-Type: application/json" \
-    --data-binary @- >/dev/null
+# Envia direto pelo bot do Telegram
+if [[ -z "${TELEGRAM_BOT_TOKEN:-}" || -z "${TELEGRAM_CHAT_ID:-}" ]]; then
+  log_err "Telegram não configurado (TELEGRAM_BOT_TOKEN/CHAT_ID)."
+  exit 1
+fi
+
+curl -sS -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+  -d "chat_id=$TELEGRAM_CHAT_ID" \
+  --data-urlencode "text=$MESSAGE" \
+  -d "parse_mode=Markdown" >/dev/null

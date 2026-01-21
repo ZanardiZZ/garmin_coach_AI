@@ -102,6 +102,31 @@ ensure_core_deps() {
   fi
 }
 
+ensure_influxdb() {
+  log "Instalando/Iniciando InfluxDB local (v1)..."
+  if command -v apt-get >/dev/null 2>&1; then
+    apt-get install -y influxdb || warn "Não consegui instalar influxdb via apt-get."
+  elif command -v dnf >/dev/null 2>&1; then
+    dnf install -y influxdb || warn "Não consegui instalar influxdb via dnf."
+  elif command -v yum >/dev/null 2>&1; then
+    yum install -y influxdb || warn "Não consegui instalar influxdb via yum."
+  else
+    warn "Gerenciador de pacotes não identificado. Instale InfluxDB manualmente."
+  fi
+
+  if command -v systemctl >/dev/null 2>&1; then
+    systemctl enable --now influxdb || true
+  elif command -v service >/dev/null 2>&1; then
+    service influxdb start || true
+  fi
+
+  if command -v influx >/dev/null 2>&1; then
+    influx -execute "CREATE DATABASE GarminStats" >/dev/null 2>&1 || true
+  else
+    curl -sS -XPOST "http://localhost:8086/query" --data-urlencode "q=CREATE DATABASE GarminStats" >/dev/null 2>&1 || true
+  fi
+}
+
 bootstrap_repo() {
   if is_repo_dir; then
     return 0
@@ -172,6 +197,12 @@ export ULTRA_COACH_KEY_PATH="$KEY_PATH_DEFAULT"
 
 # Atleta (default: zz)
 # export ATHLETE="zz"
+
+# InfluxDB local (auto)
+export INFLUX_URL="http://localhost:8086/query"
+export INFLUX_DB="GarminStats"
+export INFLUX_USER=""
+export INFLUX_PASS=""
 
 # Web (opcional)
 # export PORT="8080"
@@ -369,6 +400,7 @@ main() {
   ensure_fit_deps
   ensure_web_deps
   ensure_python_deps
+  ensure_influxdb
   init_database
   ensure_cron
   start_web

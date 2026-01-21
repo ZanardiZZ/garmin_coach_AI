@@ -132,16 +132,14 @@ async function upsertAthletes(athletes) {
   for (const a of athletes) {
     const athleteId = sqlEscape(a.athlete_id);
     const name = sqlEscape(a.name);
-    const weight = a.weight_kg ? Number(a.weight_kg) : null;
-    const ltHr = a.lt_hr ? Number(a.lt_hr) : null;
-    const ltPace = a.lt_pace_min_km ? Number(a.lt_pace_min_km) : null;
-    const ltPower = a.lt_power_w ? Number(a.lt_power_w) : null;
+    const weight = toNumberOrNull(a.weight_kg);
+    const ltHr = toNumberOrNull(a.lt_hr);
+    const ltPace = toNumberOrNull(a.lt_pace_min_km);
+    const ltPower = toNumberOrNull(a.lt_power_w);
     const goal = sqlEscape(a.goal_event || '');
     const coachMode = sqlEscape(a.coach_mode || 'moderate');
-    const weeklyHours =
-      a.weekly_hours === '' || a.weekly_hours === null || a.weekly_hours === undefined
-        ? 'NULL'
-        : Number(a.weekly_hours);
+    const weeklyHoursValue = toNumberOrNull(a.weekly_hours);
+    const weeklyHours = weeklyHoursValue === null ? 'NULL' : weeklyHoursValue;
     statements.push(
       `INSERT INTO athlete_profile (athlete_id, name, hr_max, hr_rest, weight_kg, lt_hr, lt_pace_min_km, lt_power_w, goal_event, weekly_hours_target, created_at, updated_at)
        VALUES ('${athleteId}', '${name}', ${Number(a.hr_max)}, ${Number(a.hr_rest)}, ${weight ?? 'NULL'}, ${ltHr ?? 'NULL'}, ${ltPace ?? 'NULL'}, ${ltPower ?? 'NULL'}, '${goal}', ${weeklyHours}, datetime('now'), datetime('now'))
@@ -179,16 +177,23 @@ function slugify(value) {
 function parsePaceToMin(value) {
   const raw = String(value ?? '').trim();
   if (!raw) return null;
-  if (raw.includes(':')) {
-    const [minStr, secStr] = raw.split(':');
+  const cleaned = raw.replace(/[^0-9:.,]/g, '');
+  if (!cleaned) return null;
+  if (cleaned.includes(':')) {
+    const [minStr, secStr] = cleaned.split(':');
     const mins = Number(minStr);
     const secs = Number(secStr);
     if (!Number.isFinite(mins) || !Number.isFinite(secs) || secs < 0 || secs >= 60) return null;
     return mins + secs / 60;
   }
-  const normalized = raw.replace(',', '.');
+  const normalized = cleaned.replace(',', '.');
   const asFloat = Number(normalized);
   return Number.isFinite(asFloat) ? asFloat : null;
+}
+
+function toNumberOrNull(value) {
+  const num = Number(String(value ?? '').replace(',', '.'));
+  return Number.isFinite(num) ? num : null;
 }
 
 function formatPaceMin(value) {

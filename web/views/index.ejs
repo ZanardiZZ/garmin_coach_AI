@@ -16,10 +16,13 @@
           <div class="brand-sub">Dashboard do atleta</div>
         </div>
       </div>
-      <a class="btn" href="<%= setupUrl %>">Configuracao</a>
+      <div class="header-actions">
+        <a class="btn" href="/activities">Atividades</a>
+        <a class="btn" href="<%= setupUrl %>">Configuracao</a>
+      </div>
       <div class="athlete">
         <div class="athlete-name"><%= name %></div>
-        <div class="athlete-meta"><%= athlete_id %> · <%= goal_event || "Objetivo n/a" %></div>
+        <div class="athlete-meta"><%= goal_event || "Objetivo n/a" %></div>
       </div>
     </header>
 

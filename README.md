@@ -88,12 +88,17 @@ Variaveis (salvas via wizard):
 - `GARMINCONNECT_PASSWORD`
 - `GARMINCONNECT_IS_CN`
 - `GARMIN_TOKEN_DIR`
-- `GARMIN_SYNC_DAYS`
+- `GARMIN_SYNC_DAYS` (max 180)
+- `GARMIN_FETCH_ACTIVITY_DETAILS` (true/false)
+
+Detalhamento:
+- Quando ativado, o sync grava pontos detalhados (GPS/FC/velocidade/etc) em `ActivityGPS` no Influx
+- Usado pela pagina `/activity/:id` para mapa e graficos
 
 Dependencias Python:
 ```bash
 python3 -m venv /opt/ultra-coach/.venv
-/opt/ultra-coach/.venv/bin/pip install garminconnect influxdb garth
+/opt/ultra-coach/.venv/bin/pip install garminconnect influxdb garth fitparse
 ```
 
 Creditos: https://github.com/arpanghosh8453/garmin-grafana (BSD 3-Clause).
@@ -131,6 +136,12 @@ Execucao manual:
 ```bash
 PORT=8080 ATHLETE=zz /usr/bin/node /opt/ultra-coach/web/app.js
 ```
+
+Rotas principais:
+- `/` dashboard
+- `/activities` lista de atividades
+- `/activity/:id` detalhe com mapa e graficos
+- `/setup` configuracao
 
 Auto-start via cron (instalado):
 ```

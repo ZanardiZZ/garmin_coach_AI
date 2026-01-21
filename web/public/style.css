@@ -281,6 +281,62 @@ body {
   font-size: 0.9rem;
 }
 
+.map {
+  width: 100%;
+  height: 320px;
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.table {
+  display: grid;
+  gap: 8px;
+}
+
+.table-head,
+.table-row {
+  display: grid;
+  grid-template-columns: 1.4fr 0.7fr 0.7fr 0.7fr 1.2fr;
+  gap: 10px;
+  align-items: center;
+}
+
+.table-head {
+  color: var(--muted);
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.table-row {
+  background: #f7efe7;
+  padding: 10px 12px;
+  border-radius: 12px;
+  text-decoration: none;
+  color: inherit;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.table-row:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.12);
+}
+
+@media (max-width: 900px) {
+  .table-head,
+  .table-row {
+    grid-template-columns: 1fr 0.8fr 0.8fr;
+    grid-auto-rows: auto;
+  }
+
+  .table-head div:nth-child(4),
+  .table-head div:nth-child(5),
+  .table-row div:nth-child(4),
+  .table-row div:nth-child(5) {
+    display: none;
+  }
+}
+
 @media (max-width: 720px) {
   .header {
     padding: 24px;
@@ -293,4 +349,9 @@ body {
   .athlete {
     text-align: left;
   }
+}
+.header-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
 }

@@ -1,0 +1,349 @@
+<!doctype html>
+<html lang="pt-br">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Ultra Coach - Atividade</title>
+    <link rel="stylesheet" href="/public/style.css" />
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+      crossorigin=""
+    />
+  </head>
+  <body>
+    <div class="bg-grid"></div>
+    <header class="header">
+      <div class="brand">
+        <div class="brand-mark">UC</div>
+        <div class="brand-text">
+          <div class="brand-title">Detalhe da atividade</div>
+          <div class="brand-sub"><%= profile.name %></div>
+        </div>
+      </div>
+      <div class="header-actions">
+        <a class="btn" href="/activities">Atividades</a>
+        <a class="btn" href="/">Dashboard</a>
+      </div>
+    </header>
+
+    <main class="grid">
+      <section class="card">
+        <div class="card-title">Resumo</div>
+        <div class="list">
+          <div><span>Data</span><strong><%= summary.start_at || 'n/a' %></strong></div>
+          <div><span>Distancia</span><strong><%= Number(summary.distance_km || 0).toFixed(1) %> km</strong></div>
+          <div><span>Duracao</span><strong><%= Math.round(Number(summary.duration_min || 0)) %> min</strong></div>
+          <div><span>FC media</span><strong><%= Math.round(Number(summary.avg_hr || 0)) %> bpm</strong></div>
+          <div><span>Tags</span><strong><%= summary.tags || '-' %></strong></div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-title">Mapa</div>
+        <div id="map" class="map"></div>
+      </section>
+
+      <section class="card">
+        <div class="card-title">FC</div>
+        <canvas id="chart-hr" height="160"></canvas>
+      </section>
+      <section class="card">
+        <div class="card-title">Velocidade</div>
+        <canvas id="chart-speed" height="160"></canvas>
+      </section>
+      <section class="card">
+        <div class="card-title">Elevacao</div>
+        <canvas id="chart-alt" height="160"></canvas>
+      </section>
+      <section class="card">
+        <div class="card-title">Stamina</div>
+        <canvas id="chart-stamina" height="160"></canvas>
+      </section>
+      <section class="card">
+        <div class="card-title">Potencia (estimada)</div>
+        <canvas id="chart-power" height="160"></canvas>
+      </section>
+      <section class="card">
+        <div class="card-title">Cadencia</div>
+        <canvas id="chart-cadence" height="160"></canvas>
+      </section>
+      <section class="card">
+        <div class="card-title">Comprimento da passada</div>
+        <canvas id="chart-stride" height="160"></canvas>
+      </section>
+      <section class="card">
+        <div class="card-title">Proporcao vertical</div>
+        <canvas id="chart-vratio" height="160"></canvas>
+      </section>
+      <section class="card">
+        <div class="card-title">Oscilacao vertical</div>
+        <canvas id="chart-vosc" height="160"></canvas>
+      </section>
+      <section class="card">
+        <div class="card-title">Tempo contato solo</div>
+        <canvas id="chart-gct" height="160"></canvas>
+      </section>
+      <section class="card">
+        <div class="card-title">Temperatura</div>
+        <canvas id="chart-temp" height="160"></canvas>
+      </section>
+      <section class="card">
+        <div class="card-title">Tempo em zonas de FC</div>
+        <canvas id="chart-hr-zones" height="160"></canvas>
+      </section>
+      <section class="card">
+        <div class="card-title">Tempo em zonas de forca</div>
+        <canvas id="chart-power-zones" height="160"></canvas>
+      </section>
+    </main>
+
+    <script
+      src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+      integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+      crossorigin=""
+    ></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0"></script>
+    <script>
+      const activityId = "<%= activityId %>";
+      const profile = <%- JSON.stringify(profile) %>;
+      const weightLatest = <%- JSON.stringify(weightLatest) %>;
+
+      function estimatePower(speed, grade, weightKg) {
+        if (!weightKg || !speed) return null;
+        const power = weightKg * 9.81 * speed * (0.004 + grade);
+        return Math.max(0, power);
+      }
+
+      function calcLtPower(points, weightKg) {
+        if (profile.lt_power_w) return profile.lt_power_w;
+        if (profile.lt_pace_min_km && weightKg) {
+          const speed = 1000 / (profile.lt_pace_min_km * 60);
+          return estimatePower(speed, 0, weightKg);
+        }
+        if (profile.lt_hr) {
+          const near = points.filter((p) => Math.abs((p.HeartRate || 0) - profile.lt_hr) <= 2);
+          if (near.length) {
+            const avg = near.reduce((sum, p) => sum + (p.PowerEst || 0), 0) / near.length;
+            return avg || null;
+          }
+        }
+        return null;
+      }
+
+      function timeZones(points, metricKey, thresholds) {
+        const totals = new Array(thresholds.length + 1).fill(0);
+        for (let i = 1; i < points.length; i += 1) {
+          const prev = points[i - 1];
+          const curr = points[i];
+          const dt = (new Date(curr.time) - new Date(prev.time)) / 1000;
+          if (!Number.isFinite(dt) || dt <= 0 || dt > 60) continue;
+          const value = prev[metricKey];
+          if (!Number.isFinite(value)) continue;
+          let idx = thresholds.findIndex((t) => value < t);
+          if (idx === -1) idx = thresholds.length;
+          totals[idx] += dt;
+        }
+        return totals.map((s) => Math.round(s / 60));
+      }
+
+      function makeLineChart(canvasId, label, data, color) {
+        const el = document.getElementById(canvasId);
+        const values = data.filter((d) => d.y !== null && d.y !== undefined);
+        if (!values.length) {
+          el.parentElement.querySelector('.muted')?.remove();
+          const msg = document.createElement('div');
+          msg.className = 'muted';
+          msg.textContent = 'Sem dados';
+          el.replaceWith(msg);
+          return;
+        }
+        return new Chart(el, {
+          type: 'line',
+          data: {
+            datasets: [
+              {
+                label,
+                data,
+                borderColor: color,
+                borderWidth: 2,
+                tension: 0.2,
+                pointRadius: 0,
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            plugins: { legend: { display: false } },
+            scales: {
+              x: { type: 'time', time: { unit: 'minute' } },
+              y: { beginAtZero: false },
+            },
+          },
+        });
+      }
+
+      function makeBarChart(canvasId, labels, data, color) {
+        const el = document.getElementById(canvasId);
+        return new Chart(el, {
+          type: 'bar',
+          data: {
+            labels,
+            datasets: [
+              {
+                label: 'Minutos',
+                data,
+                backgroundColor: color,
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            plugins: { legend: { display: false } },
+          },
+        });
+      }
+
+      async function loadData() {
+        const res = await fetch(`/api/activity/${activityId}`);
+        const payload = await res.json();
+        const points = payload.points || [];
+
+        const map = L.map('map');
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          attribution: '&copy; OpenStreetMap',
+        }).addTo(map);
+
+        const latlngs = points
+          .filter((p) => Number.isFinite(p.Latitude) && Number.isFinite(p.Longitude))
+          .map((p) => [p.Latitude, p.Longitude]);
+        if (latlngs.length) {
+          const line = L.polyline(latlngs, { color: '#b24b3a' }).addTo(map);
+          map.fitBounds(line.getBounds(), { padding: [24, 24] });
+        } else {
+          map.setView([0, 0], 2);
+        }
+
+        const weight = weightLatest || profile.weight_kg || null;
+        const series = points.map((p, idx) => {
+          const prev = points[idx - 1];
+          const alt = Number(p.Altitude);
+          const dist = Number(p.Distance);
+          let grade = 0;
+          if (prev && Number.isFinite(alt) && Number.isFinite(dist)) {
+            const prevAlt = Number(prev.Altitude);
+            const prevDist = Number(prev.Distance);
+            const dd = dist - prevDist;
+            if (dd > 0.5 && Number.isFinite(prevAlt)) {
+              grade = (alt - prevAlt) / dd;
+            }
+          }
+          const speed = Number(p.Speed);
+          const powerRaw = Number(p.Power);
+          const powerEst = Number.isFinite(powerRaw) ? powerRaw : estimatePower(speed, grade, weight);
+          return {
+            ...p,
+            time: p.time,
+            PowerEst: powerEst,
+            SpeedKmh: Number.isFinite(speed) ? speed * 3.6 : null,
+          };
+        });
+
+        makeLineChart(
+          'chart-hr',
+          'FC',
+          series.map((p) => ({ x: p.time, y: Number.isFinite(p.HeartRate) ? p.HeartRate : null })),
+          '#b24b3a'
+        );
+        makeLineChart(
+          'chart-speed',
+          'Velocidade (km/h)',
+          series.map((p) => ({ x: p.time, y: Number.isFinite(p.SpeedKmh) ? p.SpeedKmh : null })),
+          '#2d6a4f'
+        );
+        makeLineChart(
+          'chart-alt',
+          'Elevacao',
+          series.map((p) => ({ x: p.time, y: Number.isFinite(p.Altitude) ? p.Altitude : null })),
+          '#6b5b95'
+        );
+        makeLineChart(
+          'chart-stamina',
+          'Stamina',
+          series.map((p) => {
+            const val = Number.isFinite(p.Stamina) ? p.Stamina : p.PotentialStamina;
+            return { x: p.time, y: Number.isFinite(val) ? val : null };
+          }),
+          '#1d3557'
+        );
+        makeLineChart(
+          'chart-power',
+          'Potencia (W)',
+          series.map((p) => ({ x: p.time, y: Number.isFinite(p.PowerEst) ? p.PowerEst : null })),
+          '#ef6c00'
+        );
+        makeLineChart(
+          'chart-cadence',
+          'Cadencia',
+          series.map((p) => ({ x: p.time, y: Number.isFinite(p.Cadence) ? p.Cadence : null })),
+          '#0f766e'
+        );
+        makeLineChart(
+          'chart-stride',
+          'Stride',
+          series.map((p) => ({ x: p.time, y: Number.isFinite(p.StrideLength) ? p.StrideLength : null })),
+          '#64748b'
+        );
+        makeLineChart(
+          'chart-vratio',
+          'Vertical Ratio',
+          series.map((p) => ({ x: p.time, y: Number.isFinite(p.VerticalRatio) ? p.VerticalRatio : null })),
+          '#8b5cf6'
+        );
+        makeLineChart(
+          'chart-vosc',
+          'Vertical Oscillation',
+          series.map((p) => ({ x: p.time, y: Number.isFinite(p.VerticalOscillation) ? p.VerticalOscillation : null })),
+          '#14b8a6'
+        );
+        makeLineChart(
+          'chart-gct',
+          'Contato solo',
+          series.map((p) => {
+            const gct = Number.isFinite(p.GroundContactTime) ? p.GroundContactTime : p.StanceTime;
+            return { x: p.time, y: Number.isFinite(gct) ? gct : null };
+          }),
+          '#ef4444'
+        );
+        makeLineChart(
+          'chart-temp',
+          'Temperatura',
+          series.map((p) => ({ x: p.time, y: Number.isFinite(p.Temperature) ? p.Temperature : null })),
+          '#f59e0b'
+        );
+
+        const hrMax = profile.hr_max || 0;
+        const hrThresholds = hrMax
+          ? [0.6, 0.7, 0.8, 0.9].map((p) => p * hrMax)
+          : [];
+        const hrZones = hrThresholds.length ? timeZones(series, 'HeartRate', hrThresholds) : [];
+        if (hrZones.length) {
+          makeBarChart('chart-hr-zones', ['Z1', 'Z2', 'Z3', 'Z4', 'Z5'], hrZones, '#b24b3a');
+        }
+
+        const ltPower = calcLtPower(series, weight);
+        const powerThresholds = ltPower
+          ? [0.85, 0.95, 1.05, 1.15].map((p) => p * ltPower)
+          : [];
+        const powerZones = powerThresholds.length ? timeZones(series, 'PowerEst', powerThresholds) : [];
+        if (powerZones.length) {
+          makeBarChart('chart-power-zones', ['Z1', 'Z2', 'Z3', 'Z4', 'Z5'], powerZones, '#ef6c00');
+        }
+      }
+
+      loadData();
+    </script>
+  </body>
+</html>

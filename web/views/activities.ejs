@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="pt-br">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Ultra Coach - Atividades</title>
+    <link rel="stylesheet" href="/public/style.css" />
+  </head>
+  <body>
+    <div class="bg-grid"></div>
+    <header class="header">
+      <div class="brand">
+        <div class="brand-mark">UC</div>
+        <div class="brand-text">
+          <div class="brand-title">Atividades</div>
+          <div class="brand-sub"><%= profile.name %></div>
+        </div>
+      </div>
+      <div class="header-actions">
+        <a class="btn" href="/">Dashboard</a>
+        <a class="btn" href="/setup">Configuracao</a>
+      </div>
+    </header>
+
+    <main class="grid">
+      <section class="card">
+        <div class="card-title">Ultimas atividades</div>
+        <% if (activities.length) { %>
+          <div class="table">
+            <div class="table-head">
+              <div>Data</div>
+              <div>Distancia</div>
+              <div>Duracao</div>
+              <div>FC media</div>
+              <div>Tags</div>
+            </div>
+            <% activities.forEach((a) => { %>
+              <a class="table-row" href="/activity/<%= a.activity_id %>">
+                <div><%= a.start_at %></div>
+                <div><%= Number(a.distance_km || 0).toFixed(1) %> km</div>
+                <div><%= Math.round(Number(a.duration_min || 0)) %> min</div>
+                <div><%= Math.round(Number(a.avg_hr || 0)) %> bpm</div>
+                <div><%= a.tags || '-' %></div>
+              </a>
+            <% }) %>
+          </div>
+        <% } else { %>
+          <div class="muted">Sem atividades com Activity ID.</div>
+        <% } %>
+      </section>
+    </main>
+  </body>
+</html>

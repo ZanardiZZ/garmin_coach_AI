@@ -3,6 +3,7 @@ import os
 import sys
 import logging
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 from influxdb import InfluxDBClient
 from garminconnect import (
@@ -12,6 +13,9 @@ from garminconnect import (
     GarminConnectTooManyRequestsError,
 )
 from garth.exc import GarthHTTPError
+from fitparse import FitFile, FitParseError
+import io
+import zipfile
 
 
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
@@ -31,6 +35,18 @@ GARMIN_PASS = os.getenv("GARMINCONNECT_PASSWORD", "")
 GARMIN_IS_CN = os.getenv("GARMINCONNECT_IS_CN", "false").lower() in ("1", "true", "yes", "y")
 TOKEN_DIR = os.path.expanduser(os.getenv("GARMIN_TOKEN_DIR", "~/.ultra-coach/garminconnect"))
 SYNC_DAYS = int(os.getenv("GARMIN_SYNC_DAYS", "7"))
+if SYNC_DAYS < 1:
+    SYNC_DAYS = 1
+if SYNC_DAYS > 180:
+    SYNC_DAYS = 180
+USER_TZ = os.getenv("USER_TZ", "UTC")
+FETCH_ACTIVITY_DETAILS = os.getenv("GARMIN_FETCH_ACTIVITY_DETAILS", "true").lower() in (
+    "1",
+    "true",
+    "yes",
+    "y",
+)
+WRITE_CHUNK = int(os.getenv("GARMIN_WRITE_CHUNK", "10000"))
 
 
 def parse_influx_host(url: str) -> str:
@@ -67,7 +83,11 @@ def garmin_login():
 
 
 def date_range(days: int):
-    today = datetime.now(timezone.utc).date()
+    try:
+        tz = ZoneInfo(USER_TZ)
+    except Exception:
+        tz = timezone.utc
+    today = datetime.now(tz).date()
     start = today - timedelta(days=days)
     for n in range(days + 1):
         yield (start + timedelta(days=n)).strftime("%Y-%m-%d")
@@ -108,9 +128,8 @@ def build_body_points(garmin, date_str: str):
     return points
 
 
-def build_activity_points(garmin, date_str: str):
+def build_activity_points(activities):
     points = []
-    activities = garmin.get_activities_by_date(date_str, date_str)
     for a in activities:
         if "startTimeGMT" not in a:
             continue
@@ -146,6 +165,101 @@ def build_activity_points(garmin, date_str: str):
     return points
 
 
+def build_activity_detail_points(garmin, activity):
+    points = []
+    activity_id = activity.get("activityId")
+    activity_type = (activity.get("activityType") or {}).get("typeKey", "Unknown")
+    if not activity_id:
+        return points
+    try:
+        zip_data = garmin.download_activity(activity_id, dl_fmt=garmin.ActivityDownloadFormat.ORIGINAL)
+    except Exception as exc:
+        logging.warning("Falha ao baixar FIT activity_id=%s: %s", activity_id, str(exc))
+        return points
+
+    try:
+        zip_buffer = io.BytesIO(zip_data)
+        with zipfile.ZipFile(zip_buffer) as zip_ref:
+            fit_name = next((f for f in zip_ref.namelist() if f.endswith(".fit")), None)
+            if not fit_name:
+                logging.warning("FIT nao encontrado activity_id=%s", activity_id)
+                return points
+            fit_data = zip_ref.read(fit_name)
+    except Exception as exc:
+        logging.warning("Falha ao ler ZIP FIT activity_id=%s: %s", activity_id, str(exc))
+        return points
+
+    try:
+        fit_file = FitFile(io.BytesIO(fit_data))
+        fit_file.parse()
+    except FitParseError as exc:
+        logging.warning("Falha ao parsear FIT activity_id=%s: %s", activity_id, str(exc))
+        return points
+
+    for record in fit_file.get_messages("record"):
+        vals = record.get_values()
+        ts = vals.get("timestamp")
+        if not ts:
+            continue
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=timezone.utc)
+        else:
+            ts = ts.astimezone(timezone.utc)
+
+        lat_raw = vals.get("position_lat")
+        lon_raw = vals.get("position_long")
+        lat = (int(lat_raw) * (180 / 2**31)) if lat_raw is not None else None
+        lon = (int(lon_raw) * (180 / 2**31)) if lon_raw is not None else None
+        hr = vals.get("heart_rate")
+        speed = vals.get("enhanced_speed") or vals.get("speed")
+        dist = vals.get("distance")
+        alt = vals.get("enhanced_altitude") or vals.get("altitude")
+        cadence = vals.get("cadence")
+        stride_length = vals.get("stride_length") or vals.get("step_length")
+        vertical_oscillation = vals.get("vertical_oscillation")
+        vertical_ratio = vals.get("vertical_ratio")
+        stance_time = vals.get("stance_time")
+        ground_contact_time = vals.get("ground_contact_time")
+        ground_contact_balance = vals.get("ground_contact_balance")
+        temperature = vals.get("temperature")
+        power = vals.get("power") or vals.get("enhanced_power")
+        stamina = vals.get("stamina")
+        potential_stamina = vals.get("potential_stamina")
+
+        points.append(
+            {
+                "measurement": "ActivityGPS",
+                "time": ts.isoformat(),
+                "tags": {
+                    "ActivityID": activity_id,
+                    "ActivityType": activity_type,
+                },
+                "fields": {
+                    "Latitude": lat,
+                    "Longitude": lon,
+                    "HeartRate": hr,
+                    "Speed": speed,
+                    "Distance": dist,
+                    "Altitude": alt,
+                    "Cadence": cadence,
+                    "StrideLength": stride_length,
+                    "VerticalOscillation": vertical_oscillation,
+                    "VerticalRatio": vertical_ratio,
+                    "StanceTime": stance_time,
+                    "GroundContactTime": ground_contact_time,
+                    "GroundContactBalance": ground_contact_balance,
+                    "Temperature": temperature,
+                    "Power": power,
+                    "Stamina": stamina,
+                    "PotentialStamina": potential_stamina,
+                },
+            }
+        )
+
+    logging.info("Detalhes coletados activity_id=%s points=%d", activity_id, len(points))
+    return points
+
+
 def main():
     try:
         client = influx_client()
@@ -160,15 +274,46 @@ def main():
         sys.exit(2)
 
     total_points = 0
-    for date_str in date_range(SYNC_DAYS):
+    dates = list(date_range(SYNC_DAYS))
+    start_date = dates[0]
+    end_date = dates[-1]
+
+    try:
+        activities = garmin.get_activities_by_date(start_date, end_date)
+    except Exception as exc:
+        logging.error("Falha ao buscar atividades (%s a %s): %s", start_date, end_date, str(exc))
+        activities = []
+
+    activity_points = build_activity_points(activities)
+
+    for date_str in dates:
         body_points = build_body_points(garmin, date_str)
-        activity_points = build_activity_points(garmin, date_str)
-        points = body_points + activity_points
+        points = body_points
         if not points:
             continue
-        client.write_points(points)
+        for i in range(0, len(points), WRITE_CHUNK):
+            client.write_points(points[i : i + WRITE_CHUNK])
         total_points += len(points)
-        logging.info("Sincronizado %s: points=%d", date_str, len(points))
+        logging.info("Sincronizado body %s: points=%d", date_str, len(points))
+
+    if activity_points:
+        for i in range(0, len(activity_points), WRITE_CHUNK):
+            client.write_points(activity_points[i : i + WRITE_CHUNK])
+        total_points += len(activity_points)
+        logging.info("Sincronizado atividades: points=%d", len(activity_points))
+
+    if FETCH_ACTIVITY_DETAILS and activities:
+        detail_total = 0
+        for activity in activities:
+            detail_points = build_activity_detail_points(garmin, activity)
+            if not detail_points:
+                continue
+            for i in range(0, len(detail_points), WRITE_CHUNK):
+                client.write_points(detail_points[i : i + WRITE_CHUNK])
+            detail_total += len(detail_points)
+        if detail_total:
+            total_points += detail_total
+            logging.info("Sincronizado ActivityGPS: points=%d", detail_total)
 
     logging.info("Finalizado. Total points=%d", total_points)
 

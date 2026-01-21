@@ -14,6 +14,7 @@ fi
 
 INFLUX_URL="${INFLUX_URL:-http://192.168.20.115:8086/query}"
 INFLUX_DB="${INFLUX_DB:-GarminStats}"
+USER_TZ="${USER_TZ:-}"
 
 # janela de import
 SYNC_DAYS="${SYNC_DAYS:-21}"
@@ -75,7 +76,11 @@ ensure_influx_response() {
 # (assumindo TZ do sistema correta - no seu caso -03 normalmente)
 to_local_sql_datetime() {
   local iso="$1" # ex: 2026-01-15T09:11:00Z
-  date -d "$iso" +"%F %T"
+  if [[ -n "$USER_TZ" ]]; then
+    TZ="$USER_TZ" date -d "$iso" +"%F %T"
+  else
+    date -d "$iso" +"%F %T"
+  fi
 }
 
 # TRIMP (Banister) usando HRmax e HRrest do profile
@@ -134,6 +139,7 @@ SELECT
   "activityType",
   "averageHR",
   "averageSpeed",
+  "Activity_ID",
   "distance",
   "elapsedDuration",
   "movingDuration",
@@ -194,6 +200,7 @@ else
     avg_hr="$(echo "$row" | jq -r '.averageHR // empty')"
     max_hr="$(echo "$row" | jq -r '.maxHR // empty')"
 
+    activity_id="$(echo "$row" | jq -r '.Activity_ID // empty')"
     dist_m="$(echo "$row" | jq -r '.distance // empty')"
     elapsed_s="$(echo "$row" | jq -r '.elapsedDuration // empty')"
     moving_s="$(echo "$row" | jq -r '.movingDuration // empty')"
@@ -239,27 +246,20 @@ else
     safe_athlete="$(sql_escape "$ATHLETE_ID")"
     safe_start="$(sql_escape "$start_local")"
     safe_tags="$(sql_escape "$tags")"
+    activity_id_sql="NULL"
+    if [[ -n "$activity_id" ]]; then
+      activity_id_sql="'$(sql_escape "$activity_id")'"
+    fi
 
     # Inserção idempotente por (athlete_id, start_at)
     sqlite3 "$ULTRA_COACH_DB" <<SQL
 INSERT INTO session_log
-  (athlete_id, start_at, duration_min, distance_km, avg_hr, max_hr, avg_pace_min_km, trimp, tags, created_at)
-SELECT
-  '$safe_athlete',
-  '$safe_start',
-  $dur_min,
-  $dist_km,
-  $avg_hr,
-  ${max_hr:-NULL},
-  ${pace_min_km:-NULL},
-  ${trimp:-NULL},
-  '$safe_tags',
-  datetime('now')
-WHERE NOT EXISTS (
-  SELECT 1 FROM session_log
-  WHERE athlete_id='$safe_athlete'
-    AND start_at='$safe_start'
-);
+  (athlete_id, activity_id, start_at, duration_min, distance_km, avg_hr, max_hr, avg_pace_min_km, trimp, tags, created_at)
+VALUES
+  ('$safe_athlete', $activity_id_sql, '$safe_start', $dur_min, $dist_km, $avg_hr,
+   ${max_hr:-NULL}, ${pace_min_km:-NULL}, ${trimp:-NULL}, '$safe_tags', datetime('now'))
+ON CONFLICT(athlete_id, start_at) DO UPDATE SET
+  activity_id=COALESCE(excluded.activity_id, session_log.activity_id);
 SQL
 
     imported=$((imported+1))

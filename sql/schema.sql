@@ -15,6 +15,10 @@ CREATE TABLE IF NOT EXISTS athlete_profile (
   name TEXT,
   hr_max INTEGER NOT NULL,
   hr_rest INTEGER NOT NULL DEFAULT 50,
+  weight_kg REAL,
+  lt_hr INTEGER,
+  lt_pace_min_km REAL,
+  lt_power_w REAL,
   goal_event TEXT,           -- ex: "Ultra 12h", "90km trail"
   weekly_hours_target REAL,  -- horas/semana alvo
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
@@ -100,6 +104,7 @@ CREATE TABLE IF NOT EXISTS weekly_state (
 CREATE TABLE IF NOT EXISTS session_log (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   athlete_id TEXT NOT NULL,
+  activity_id TEXT,
   start_at TEXT NOT NULL,    -- datetime local
   duration_min REAL,
   distance_km REAL,
@@ -116,6 +121,9 @@ CREATE TABLE IF NOT EXISTS session_log (
 
 CREATE INDEX IF NOT EXISTS idx_session_log_athlete_date
   ON session_log(athlete_id, start_at);
+
+CREATE INDEX IF NOT EXISTS idx_session_log_activity_id
+  ON session_log(activity_id);
 
 -- ============================================
 -- TABELA: body_comp_log

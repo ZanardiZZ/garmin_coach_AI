@@ -278,9 +278,9 @@ ensure_python_deps() {
     log "Criando venv Python em $venv_dir ..."
     python3 -m venv "$venv_dir"
   fi
-  log "Instalando deps Python no venv (garminconnect, garth, influxdb)..."
+  log "Instalando deps Python no venv (garminconnect, garth, influxdb, fitparse)..."
   "$venv_dir/bin/pip" install --upgrade pip --quiet || true
-  "$venv_dir/bin/pip" install garminconnect garth influxdb --quiet
+  "$venv_dir/bin/pip" install garminconnect garth influxdb fitparse --quiet
 }
 
 init_database() {

@@ -132,6 +132,10 @@ async function upsertAthletes(athletes) {
   for (const a of athletes) {
     const athleteId = sqlEscape(a.athlete_id);
     const name = sqlEscape(a.name);
+    const weight = a.weight_kg ? Number(a.weight_kg) : null;
+    const ltHr = a.lt_hr ? Number(a.lt_hr) : null;
+    const ltPace = a.lt_pace_min_km ? Number(a.lt_pace_min_km) : null;
+    const ltPower = a.lt_power_w ? Number(a.lt_power_w) : null;
     const goal = sqlEscape(a.goal_event || '');
     const coachMode = sqlEscape(a.coach_mode || 'moderate');
     const weeklyHours =
@@ -139,12 +143,16 @@ async function upsertAthletes(athletes) {
         ? 'NULL'
         : Number(a.weekly_hours);
     statements.push(
-      `INSERT INTO athlete_profile (athlete_id, name, hr_max, hr_rest, goal_event, weekly_hours_target, created_at, updated_at)
-       VALUES ('${athleteId}', '${name}', ${Number(a.hr_max)}, ${Number(a.hr_rest)}, '${goal}', ${weeklyHours}, datetime('now'), datetime('now'))
+      `INSERT INTO athlete_profile (athlete_id, name, hr_max, hr_rest, weight_kg, lt_hr, lt_pace_min_km, lt_power_w, goal_event, weekly_hours_target, created_at, updated_at)
+       VALUES ('${athleteId}', '${name}', ${Number(a.hr_max)}, ${Number(a.hr_rest)}, ${weight ?? 'NULL'}, ${ltHr ?? 'NULL'}, ${ltPace ?? 'NULL'}, ${ltPower ?? 'NULL'}, '${goal}', ${weeklyHours}, datetime('now'), datetime('now'))
        ON CONFLICT(athlete_id) DO UPDATE SET
          name=excluded.name,
          hr_max=excluded.hr_max,
          hr_rest=excluded.hr_rest,
+         weight_kg=excluded.weight_kg,
+         lt_hr=excluded.lt_hr,
+         lt_pace_min_km=excluded.lt_pace_min_km,
+         lt_power_w=excluded.lt_power_w,
          goal_event=excluded.goal_event,
          weekly_hours_target=excluded.weekly_hours_target,
          updated_at=datetime('now');`
@@ -156,6 +164,16 @@ async function upsertAthletes(athletes) {
     );
   }
   await runSql(`BEGIN; ${statements.join(' ')} COMMIT;`);
+}
+
+function slugify(value) {
+  const ascii = String(value ?? '')
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[^\x00-\x7F]/g, '')
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+  return ascii || 'athlete';
 }
 
 function basicAuth(req, res, next) {
@@ -171,22 +189,70 @@ function basicAuth(req, res, next) {
 
 app.use(basicAuth);
 
+async function getAthleteProfile(athleteId) {
+  const safeAthlete = sqlEscape(athleteId);
+  const row = await runSql(
+    `SELECT athlete_id, name, hr_max, hr_rest, weight_kg, lt_hr, lt_pace_min_km, lt_power_w, goal_event
+     FROM athlete_profile WHERE athlete_id='${safeAthlete}' LIMIT 1;`
+  );
+  if (!row) return null;
+  const [athlete_id, name, hr_max, hr_rest, weight_kg, lt_hr, lt_pace_min_km, lt_power_w, goal_event] =
+    row.split('|');
+  return {
+    athlete_id,
+    name,
+    hr_max: Number(hr_max || 0),
+    hr_rest: Number(hr_rest || 0),
+    weight_kg: weight_kg ? Number(weight_kg) : null,
+    lt_hr: lt_hr ? Number(lt_hr) : null,
+    lt_pace_min_km: lt_pace_min_km ? Number(lt_pace_min_km) : null,
+    lt_power_w: lt_power_w ? Number(lt_power_w) : null,
+    goal_event,
+  };
+}
+
+async function getLatestWeight(athleteId) {
+  const safeAthlete = sqlEscape(athleteId);
+  const row = await runSql(
+    `SELECT weight_kg FROM body_comp_log WHERE athlete_id='${safeAthlete}' ORDER BY measured_at DESC LIMIT 1;`
+  );
+  if (!row) return null;
+  const value = Number(row.split('|')[0]);
+  return Number.isFinite(value) ? value : null;
+}
+
 app.get('/setup', async (req, res) => {
   try {
     const config = await loadConfigMap();
     const rows = await runSql(
-      'SELECT p.athlete_id, p.name, p.hr_max, p.hr_rest, p.goal_event, p.weekly_hours_target, s.coach_mode ' +
+      'SELECT p.athlete_id, p.name, p.hr_max, p.hr_rest, p.weight_kg, p.lt_hr, p.lt_pace_min_km, p.lt_power_w, ' +
+        'p.goal_event, p.weekly_hours_target, s.coach_mode ' +
         'FROM athlete_profile p LEFT JOIN athlete_state s ON s.athlete_id = p.athlete_id ORDER BY p.athlete_id;'
     );
     const athletes = rows
       ? rows.split('\n').map((line) => {
-          const [athlete_id, name, hr_max, hr_rest, goal_event, weekly_hours_target, coach_mode] =
-            line.split('|');
+          const [
+            athlete_id,
+            name,
+            hr_max,
+            hr_rest,
+            weight_kg,
+            lt_hr,
+            lt_pace_min_km,
+            lt_power_w,
+            goal_event,
+            weekly_hours_target,
+            coach_mode,
+          ] = line.split('|');
           return {
             athlete_id,
             name,
             hr_max,
             hr_rest,
+            weight_kg,
+            lt_hr,
+            lt_pace_min_km,
+            lt_power_w,
             goal_event,
             weekly_hours_target,
             coach_mode: coach_mode || 'moderate',
@@ -202,6 +268,10 @@ app.get('/setup', async (req, res) => {
 app.post('/setup', async (req, res) => {
   try {
     const count = Number(req.body.athlete_count || 1);
+    const existingIdsRows = await runSql('SELECT athlete_id FROM athlete_profile;');
+    const usedIds = new Set(
+      existingIdsRows ? existingIdsRows.split('\n').map((row) => row.split('|')[0]) : []
+    );
     const athletes = [];
     for (let i = 0; i < count; i += 1) {
       const suffix = i + 1;
@@ -209,12 +279,30 @@ app.post('/setup', async (req, res) => {
       const name = String(req.body[`name_${suffix}`] || '').trim();
       const hr_max = String(req.body[`hr_max_${suffix}`] || '').trim();
       const hr_rest = String(req.body[`hr_rest_${suffix}`] || '50').trim();
-      if (!athlete_id || !name || !hr_max) continue;
+      if (!name || !hr_max) continue;
+
+      let finalId = athlete_id;
+      if (!finalId) {
+        const base = slugify(name);
+        let candidate = base;
+        let idx = 2;
+        while (usedIds.has(candidate)) {
+          candidate = `${base}_${idx}`;
+          idx += 1;
+        }
+        finalId = candidate;
+      }
+      usedIds.add(finalId);
+
       athletes.push({
-        athlete_id,
+        athlete_id: finalId,
         name,
         hr_max,
         hr_rest,
+        weight_kg: String(req.body[`weight_kg_${suffix}`] || '').trim(),
+        lt_pace_min_km: String(req.body[`lt_pace_${suffix}`] || '').trim(),
+        lt_hr: String(req.body[`lt_hr_${suffix}`] || '').trim(),
+        lt_power_w: String(req.body[`lt_power_${suffix}`] || '').trim(),
         goal_event: String(req.body[`goal_${suffix}`] || '').trim(),
         weekly_hours: String(req.body[`weekly_hours_${suffix}`] || '').trim(),
         coach_mode: String(req.body[`coach_mode_${suffix}`] || 'moderate').trim(),
@@ -236,9 +324,11 @@ app.post('/setup', async (req, res) => {
       GARMINCONNECT_IS_CN: req.body.garmin_is_cn || 'false',
       GARMIN_TOKEN_DIR: req.body.garmin_token_dir || '',
       GARMIN_SYNC_DAYS: req.body.garmin_sync_days || '7',
+      GARMIN_FETCH_ACTIVITY_DETAILS: req.body.garmin_fetch_activity_details || 'true',
       WEEKLY_SUMMARY_DAY: req.body.weekly_summary_day || '1',
       WEEKLY_SUMMARY_TIME: req.body.weekly_summary_time || '07:00',
       WEEKLY_SUMMARY_TZ: req.body.weekly_summary_tz || 'America/Sao_Paulo',
+      USER_TZ: req.body.weekly_summary_tz || 'America/Sao_Paulo',
       ATHLETE: athletes.length === 1 ? athletes[0].athlete_id : ATHLETE_DEFAULT,
     });
 
@@ -345,6 +435,94 @@ app.get('/', async (req, res) => {
     });
   } catch (err) {
     res.status(500).send(`Erro ao carregar dados: ${err.message}`);
+  }
+});
+
+app.get('/activities', async (req, res) => {
+  const athleteId = String(req.query.athlete || ATHLETE_DEFAULT);
+  try {
+    const profile = await getAthleteProfile(athleteId);
+    if (!profile) return res.redirect('/setup');
+
+    const rows = await runSql(
+      `SELECT activity_id, start_at, distance_km, duration_min, avg_hr, tags
+       FROM session_log
+       WHERE athlete_id='${sqlEscape(athleteId)}'
+         AND activity_id IS NOT NULL
+       ORDER BY start_at DESC
+       LIMIT 200;`
+    );
+    const activities = rows
+      ? rows.split('\n').map((line) => {
+          const [activity_id, start_at, distance_km, duration_min, avg_hr, tags] = line.split('|');
+          return {
+            activity_id,
+            start_at,
+            distance_km,
+            duration_min,
+            avg_hr,
+            tags,
+          };
+        })
+      : [];
+    res.render('activities', { profile, activities });
+  } catch (err) {
+    res.status(500).send(`Erro ao carregar atividades: ${err.message}`);
+  }
+});
+
+app.get('/activity/:id', async (req, res) => {
+  const athleteId = String(req.query.athlete || ATHLETE_DEFAULT);
+  const activityId = String(req.params.id);
+  try {
+    const profile = await getAthleteProfile(athleteId);
+    if (!profile) return res.redirect('/setup');
+    const weightLatest = await getLatestWeight(athleteId);
+    const summaryRow = await runSql(
+      `SELECT start_at, distance_km, duration_min, avg_hr, tags
+       FROM session_log
+       WHERE athlete_id='${sqlEscape(athleteId)}' AND activity_id='${sqlEscape(activityId)}'
+       ORDER BY start_at DESC LIMIT 1;`
+    );
+    const [start_at, distance_km, duration_min, avg_hr, tags] = (summaryRow || '||||').split('|');
+    res.render('activity', {
+      profile,
+      activityId,
+      summary: { start_at, distance_km, duration_min, avg_hr, tags },
+      weightLatest,
+    });
+  } catch (err) {
+    res.status(500).send(`Erro ao carregar atividade: ${err.message}`);
+  }
+});
+
+app.get('/api/activity/:id', async (req, res) => {
+  const activityId = String(req.params.id);
+  const config = await loadConfigMap();
+  const influxUrl = config.INFLUX_URL || 'http://localhost:8086/query';
+  const influxDb = config.INFLUX_DB || 'GarminStats';
+
+  try {
+    const url = new URL(influxUrl);
+    const query = `SELECT * FROM "ActivityGPS" WHERE "ActivityID"='${activityId}' ORDER BY time ASC`;
+    url.searchParams.set('db', influxDb);
+    url.searchParams.set('q', query);
+
+    const response = await fetch(url.toString());
+    const payload = await response.json();
+    const series = payload?.results?.[0]?.series?.[0];
+    if (!series) return res.json({ points: [] });
+    const columns = series.columns || [];
+    const points = (series.values || []).map((row) => {
+      const obj = {};
+      for (let i = 0; i < columns.length; i += 1) {
+        obj[columns[i]] = row[i];
+      }
+      return obj;
+    });
+    res.json({ points });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 

@@ -66,8 +66,15 @@
             </div>
             <div class="form-group">
               <label>Sync Days</label>
-              <input name="garmin_sync_days" type="number" min="1" max="365" value="<%= config.GARMIN_SYNC_DAYS || 7 %>" />
+              <input name="garmin_sync_days" type="number" min="1" max="180" value="<%= config.GARMIN_SYNC_DAYS || 7 %>" />
             </div>
+          </div>
+          <div class="form-group">
+            <label>Detalhar atividades (GPS/FC)</label>
+            <select name="garmin_fetch_activity_details">
+              <option value="true" <%= (config.GARMIN_FETCH_ACTIVITY_DETAILS || 'true') === 'true' ? 'selected' : '' %>>sim</option>
+              <option value="false" <%= config.GARMIN_FETCH_ACTIVITY_DETAILS === 'false' ? 'selected' : '' %>>nao</option>
+            </select>
           </div>
 
           <div class="card-title">Atletas</div>
@@ -103,7 +110,7 @@
             <input name="weekly_summary_time" form="setup-form" type="text" value="<%= config.WEEKLY_SUMMARY_TIME || '07:00' %>" />
           </div>
           <div class="form-group">
-            <label>Fuso horario</label>
+            <label>Fuso horario (perfil e resumo)</label>
             <input name="weekly_summary_tz" form="setup-form" type="text" value="<%= config.WEEKLY_SUMMARY_TZ || 'America/Sao_Paulo' %>" />
           </div>
         </div>
@@ -124,11 +131,8 @@
           const block = document.createElement('div');
           block.className = 'athlete-block';
           block.innerHTML = `
+            <input type="hidden" name="athlete_id_${idx}" value="${a.athlete_id || ''}" />
             <div class="form-row">
-              <div class="form-group">
-                <label>Athlete ID</label>
-                <input name="athlete_id_${idx}" type="text" value="${a.athlete_id || ''}" required />
-              </div>
               <div class="form-group">
                 <label>Nome</label>
                 <input name="name_${idx}" type="text" value="${a.name || ''}" required />
@@ -160,6 +164,24 @@
               <div class="form-group">
                 <label>Horas/semana</label>
                 <input name="weekly_hours_${idx}" type="number" step="0.5" min="0" value="${a.weekly_hours_target || ''}" />
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Peso (kg)</label>
+                <input name="weight_kg_${idx}" type="number" step="0.1" min="0" value="${a.weight_kg || ''}" />
+              </div>
+              <div class="form-group">
+                <label>LT Pace (min/km)</label>
+                <input name="lt_pace_${idx}" type="number" step="0.01" min="0" value="${a.lt_pace_min_km || ''}" />
+              </div>
+              <div class="form-group">
+                <label>LT FC (bpm)</label>
+                <input name="lt_hr_${idx}" type="number" min="0" value="${a.lt_hr || ''}" />
+              </div>
+              <div class="form-group">
+                <label>LT Power (W)</label>
+                <input name="lt_power_${idx}" type="number" step="1" min="0" value="${a.lt_power_w || ''}" />
               </div>
             </div>
           `;

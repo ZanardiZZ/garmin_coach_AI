@@ -172,8 +172,8 @@
                 <input name="weight_kg_${idx}" type="number" step="0.1" min="0" value="${a.weight_kg || ''}" />
               </div>
               <div class="form-group">
-                <label>LT Pace (min/km)</label>
-                <input name="lt_pace_${idx}" type="number" step="0.01" min="0" value="${a.lt_pace_min_km || ''}" />
+                <label>LT Pace (min/km, ex: 4:32)</label>
+                <input name="lt_pace_${idx}" type="text" placeholder="4:32" value="${a.lt_pace_display || ''}" />
               </div>
               <div class="form-group">
                 <label>LT FC (bpm)</label>

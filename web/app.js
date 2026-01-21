@@ -176,6 +176,31 @@ function slugify(value) {
   return ascii || 'athlete';
 }
 
+function parsePaceToMin(value) {
+  const raw = String(value ?? '').trim();
+  if (!raw) return null;
+  if (raw.includes(':')) {
+    const [minStr, secStr] = raw.split(':');
+    const mins = Number(minStr);
+    const secs = Number(secStr);
+    if (!Number.isFinite(mins) || !Number.isFinite(secs) || secs < 0 || secs >= 60) return null;
+    return mins + secs / 60;
+  }
+  const normalized = raw.replace(',', '.');
+  const asFloat = Number(normalized);
+  return Number.isFinite(asFloat) ? asFloat : null;
+}
+
+function formatPaceMin(value) {
+  const minutes = Number(value);
+  if (!Number.isFinite(minutes) || minutes <= 0) return '';
+  const mins = Math.floor(minutes);
+  const secs = Math.round((minutes - mins) * 60);
+  const adjMins = secs === 60 ? mins + 1 : mins;
+  const adjSecs = secs === 60 ? 0 : secs;
+  return `${adjMins}:${String(adjSecs).padStart(2, '0')}`;
+}
+
 function basicAuth(req, res, next) {
   if (!BASIC_USER || !BASIC_PASS) return next();
   const header = req.headers.authorization || '';
@@ -252,6 +277,7 @@ app.get('/setup', async (req, res) => {
             weight_kg,
             lt_hr,
             lt_pace_min_km,
+            lt_pace_display: formatPaceMin(lt_pace_min_km),
             lt_power_w,
             goal_event,
             weekly_hours_target,
@@ -300,7 +326,7 @@ app.post('/setup', async (req, res) => {
         hr_max,
         hr_rest,
         weight_kg: String(req.body[`weight_kg_${suffix}`] || '').trim(),
-        lt_pace_min_km: String(req.body[`lt_pace_${suffix}`] || '').trim(),
+        lt_pace_min_km: parsePaceToMin(req.body[`lt_pace_${suffix}`]),
         lt_hr: String(req.body[`lt_hr_${suffix}`] || '').trim(),
         lt_power_w: String(req.body[`lt_power_${suffix}`] || '').trim(),
         goal_event: String(req.body[`goal_${suffix}`] || '').trim(),

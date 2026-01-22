@@ -141,9 +141,10 @@ parse_intent() {
         {role:"system",content:"Voce e um parser de intents. Responda APENAS JSON valido."},
         {role:"user",content:
           ("Interprete a mensagem e responda JSON: " +
-           "{\"intent\":\"chat|feedback|reschedule\",\"perceived\":\"easy|medium|hard|null\",\"rpe\":1-10|null,\"from_date\":\"YYYY-MM-DD|null\",\"to_date\":\"YYYY-MM-DD|null\",\"notes\":\"string|null\"}. " +
+           "{\"intent\":\"chat|feedback|reschedule|stats\",\"perceived\":\"easy|medium|hard|null\",\"rpe\":1-10|null,\"from_date\":\"YYYY-MM-DD|null\",\"to_date\":\"YYYY-MM-DD|null\",\"days\":1-365|null,\"notes\":\"string|null\"}. " +
            "Use intent=feedback quando o usuario descreve como foi o treino. " +
            "Use intent=reschedule quando pedir para mover treino. " +
+           "Use intent=stats quando pedir acumulado/estatisticas (ex: ultimos 30 dias). " +
            "Use intent=chat caso contrario. " +
            "Mensagem: " + $text)
         }
@@ -156,6 +157,70 @@ parse_intent() {
     -d "@$tmp_body")
   rm -f "$tmp_body"
   echo "$resp" | jq -r '.output[0].content[0].text // empty'
+}
+
+calc_stats() {
+  local days="$1"
+  local safe_athlete
+  safe_athlete="$(sql_escape "$ATHLETE_ID")"
+  local stats
+  stats=$(sqlite3 "$ULTRA_COACH_DB" <<SQL
+SELECT
+  ROUND(COALESCE(SUM(distance_km),0),2),
+  ROUND(COALESCE(SUM(duration_min),0),1),
+  ROUND(COALESCE(SUM(trimp),0),1),
+  COUNT(*),
+  SUM(CASE WHEN tags LIKE '%easy%' THEN 1 ELSE 0 END),
+  SUM(CASE WHEN tags LIKE '%quality%' THEN 1 ELSE 0 END),
+  SUM(CASE WHEN tags LIKE '%long%' THEN 1 ELSE 0 END)
+FROM session_log
+WHERE athlete_id='$safe_athlete'
+  AND date(start_at) >= date('now','localtime','-${days} days');
+SQL
+)
+  local total_km total_min total_trimp count easy_count quality_count long_count
+  IFS='|' read -r total_km total_min total_trimp count easy_count quality_count long_count <<<"$stats"
+  local pace
+  if [[ "$total_km" != "0" && -n "$total_km" ]]; then
+    pace=$(awk -v m="$total_min" -v km="$total_km" 'BEGIN{printf "%.2f", (m/km)}')
+  else
+    pace="0"
+  fi
+
+  local elev_gain="n/a"
+  if [[ -n "${INFLUX_URL:-}" && -n "${INFLUX_DB:-}" ]]; then
+    local act_ids
+    act_ids=$(sqlite3 "$ULTRA_COACH_DB" "SELECT activity_id FROM session_log WHERE athlete_id='$(sql_escape "$ATHLETE_ID")' AND activity_id IS NOT NULL AND date(start_at) >= date('now','localtime','-${days} days');")
+    if [[ -n "$act_ids" ]]; then
+      local total_gain=0
+      while IFS= read -r act_id; do
+        [[ -z "$act_id" ]] && continue
+        local payload
+        payload=$(curl -sS -G "$INFLUX_URL" --data-urlencode "db=$INFLUX_DB" --data-urlencode "q=SELECT Altitude FROM ActivityGPS WHERE ActivityID='$act_id' ORDER BY time ASC")
+        local gains
+        gains=$(echo "$payload" | jq -r '
+          (.results[0].series[0].values // []) |
+          map(.[1]) as $alts |
+          reduce range(1; ($alts|length)) as $i (0;
+            . + ( ($alts[$i] - $alts[$i-1]) | if . > 0 then . else 0 end )
+          )')
+        if [[ "$gains" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
+          total_gain=$(awk -v a="$total_gain" -v b="$gains" 'BEGIN{printf "%.1f", (a+b)}')
+        fi
+      done <<< "$act_ids"
+      elev_gain="${total_gain} m"
+    fi
+  fi
+
+  cat <<MSG
+Resumo ${days} dias:
+- Km total: ${total_km} km
+- Tempo total: ${total_min} min
+- Carga (TRIMP): ${total_trimp}
+- Treinos: ${count} (easy ${easy_count}, quality ${quality_count}, long ${long_count})
+- Pace medio: ${pace} min/km
+- Elevacao acumulada: ${elev_gain}
+MSG
 }
 
 offset=0
@@ -233,6 +298,19 @@ while true; do
         }
         insert_chat "assistant" "$result"
         send_message "$chat_id" "$result"
+        continue
+      fi
+
+      if [[ "$intent" == "stats" ]]; then
+        days="$(echo "$intent_json" | jq -r '.days // 30' 2>/dev/null)"
+        if ! [[ "$days" =~ ^[0-9]+$ ]]; then
+          days=30
+        fi
+        if [[ "$days" -lt 1 ]]; then days=1; fi
+        if [[ "$days" -gt 365 ]]; then days=365; fi
+        reply="$(calc_stats "$days")"
+        insert_chat "assistant" "$reply"
+        send_message "$chat_id" "$reply"
         continue
       fi
 

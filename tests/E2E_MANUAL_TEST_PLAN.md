@@ -39,15 +39,18 @@ if [[ -f /etc/ultra-coach/env ]]; then
   echo "✅ Arquivo /etc/ultra-coach/env existe"
   source /etc/ultra-coach/env
 
-  # Verificar variáveis críticas
+  # Verificar variáveis críticas (se não usar /setup web)
   [[ -n "$OPENAI_API_KEY" ]] && echo "✅ OPENAI_API_KEY configurado" || echo "❌ OPENAI_API_KEY FALTANDO"
   [[ -n "$INFLUX_URL" ]] && echo "✅ INFLUX_URL configurado" || echo "❌ INFLUX_URL FALTANDO"
-  [[ -n "$WEBHOOK_URL" ]] && echo "✅ WEBHOOK_URL configurado" || echo "❌ WEBHOOK_URL FALTANDO"
+  [[ -n "$TELEGRAM_BOT_TOKEN" ]] && echo "✅ TELEGRAM_BOT_TOKEN configurado" || echo "⚠️  TELEGRAM_BOT_TOKEN FALTANDO"
+  [[ -n "$TELEGRAM_CHAT_ID" ]] && echo "✅ TELEGRAM_CHAT_ID configurado" || echo "⚠️  TELEGRAM_CHAT_ID FALTANDO"
   [[ -n "$ATHLETE" ]] && echo "✅ ATHLETE = $ATHLETE" || echo "⚠️  ATHLETE não configurado (usará 'zz')"
 else
   echo "❌ Arquivo /etc/ultra-coach/env NÃO EXISTE"
 fi
 ```
+
+**Nota:** o caminho recomendado é configurar tudo via `http://<host>:8080/setup` (os segredos ficam criptografados no SQLite).
 
 ### 3. Verificar Estrutura de Diretórios
 
@@ -100,15 +103,25 @@ sqlite3 /var/lib/ultra-coach/coach.sqlite ".tables"
 
 **Esperado:**
 ```
-athlete_profile       daily_plan          session_log
-athlete_state         daily_plan_ai       weekly_state
-body_comp_log         schema_migrations
-coach_policy
+athlete_profile       config_kv           coach_policy
+athlete_state         weekly_state        session_log
+body_comp_log         daily_plan          daily_plan_ai
+coach_chat            athlete_feedback
 ```
 
 **Verificações:**
-- [ ] Todas as 9 tabelas existem
+- [ ] Todas as 11 tabelas existem
 - [ ] Sem mensagens de erro
+
+### 1.2.1 Seed mock para dashboard (opcional)
+
+```bash
+/opt/ultra-coach/bin/mock_seed.sh --reset
+```
+
+**Verificações:**
+- [ ] `/coach` mostra histórico de conversa e feedback
+- [ ] `/activities` lista atividades mock
 
 ### 1.3 Verificar Policies Padrão
 
@@ -119,8 +132,8 @@ sqlite3 /var/lib/ultra-coach/coach.sqlite "SELECT mode, readiness_floor, fatigue
 **Esperado:**
 ```
 conservative|70|60
-moderate|65|70
-aggressive|60|80
+moderate|60|70
+aggressive|50|80
 ```
 
 **Verificações:**
@@ -153,7 +166,7 @@ INSERT OR REPLACE INTO athlete_profile (
   athlete_id, name, hr_max, hr_rest, weight_kg, lt_hr, lt_pace_min_km, lt_power_w, goal_event, weekly_hours_target
 )
 VALUES (
-  'test_e2e', 185, 48, 'Ultra 12h Test', '2026-06-15'
+  'test_e2e', 'Atleta Teste', 185, 48, 72.0, 165, 4.5, 320, 'Ultra 12h Test', 10.0
 );
 EOF
 ```
@@ -1080,3 +1093,58 @@ Ao completar todos os testes acima, você terá validado:
 **Data de execução:** ___________
 **Executado por:** ___________
 **Resultado geral:** [ ] ✅ Passou  [ ] ⚠️ Passou com avisos  [ ] ❌ Falhou
+
+---
+
+## 💬 Teste 12: Coach Chat e Feedback (Web/Telegram)
+
+### 12.1 Web Chat
+
+1) Acesse: `http://<host>:8080/coach`
+2) Envie uma mensagem (ex: "Treino de ontem foi pesado")
+
+Verificar no DB:
+```bash
+sqlite3 /var/lib/ultra-coach/coach.sqlite \
+  "SELECT role, message FROM coach_chat WHERE athlete_id='test_e2e' ORDER BY created_at DESC LIMIT 5;"
+```
+
+**Verificações:**
+- [ ] Mensagem do usuário registrada
+- [ ] Resposta do coach registrada
+
+### 12.2 Feedback
+
+1) No /coach, preencha feedback (percepcao, RPE, notas)
+
+Verificar no DB:
+```bash
+sqlite3 /var/lib/ultra-coach/coach.sqlite \
+  "SELECT perceived, rpe, notes FROM athlete_feedback WHERE athlete_id='test_e2e' ORDER BY created_at DESC LIMIT 3;"
+```
+
+**Verificações:**
+- [ ] Feedback salvo
+
+### 12.3 Telegram Bot (opcional)
+
+Enviar no Telegram:
+```
+/feedback hard 8 subida longa
+```
+
+**Verificar no DB:**
+```bash
+sqlite3 /var/lib/ultra-coach/coach.sqlite \
+  "SELECT perceived, rpe, notes FROM athlete_feedback WHERE athlete_id='test_e2e' ORDER BY created_at DESC LIMIT 3;"
+```
+
+### 12.4 Feedback nas constraints
+
+```bash
+sqlite3 /var/lib/ultra-coach/coach.sqlite \
+  "SELECT json_extract(constraints_json, '$.feedback_recent') FROM daily_plan_ai WHERE athlete_id='test_e2e' AND plan_date=date('now');"
+```
+
+**Verificações:**
+- [ ] Feedback recente aparece no JSON de constraints

@@ -29,6 +29,7 @@ teardown() {
     "athlete_state"
     "weekly_state"
     "session_log"
+    "daily_metrics"
     "body_comp_log"
     "coach_chat"
     "athlete_feedback"
@@ -131,6 +132,23 @@ teardown() {
   assert_contains "$output" "conditions"
   assert_contains "$output" "notes"
   assert_contains "$output" "created_at"
+}
+
+@test "valida que tabela daily_metrics tem colunas corretas" {
+  run sqlite3 "$TEST_DB" "PRAGMA table_info(daily_metrics);"
+
+  assert_success
+  assert_contains "$output" "athlete_id"
+  assert_contains "$output" "day_date"
+  assert_contains "$output" "total_distance_km"
+  assert_contains "$output" "total_time_min"
+  assert_contains "$output" "total_trimp"
+  assert_contains "$output" "total_elev_gain_m"
+  assert_contains "$output" "count_sessions"
+  assert_contains "$output" "count_easy"
+  assert_contains "$output" "count_quality"
+  assert_contains "$output" "count_long"
+  assert_contains "$output" "updated_at"
 }
 
 @test "valida que índices foram criados" {

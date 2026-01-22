@@ -108,6 +108,7 @@ CREATE TABLE IF NOT EXISTS session_log (
   start_at TEXT NOT NULL,    -- datetime local
   duration_min REAL,
   distance_km REAL,
+  elevation_gain_m REAL,
   avg_hr INTEGER,
   max_hr INTEGER,
   avg_pace_min_km REAL,
@@ -124,6 +125,29 @@ CREATE INDEX IF NOT EXISTS idx_session_log_athlete_date
 
 CREATE INDEX IF NOT EXISTS idx_session_log_activity_id
   ON session_log(activity_id);
+
+-- ============================================
+-- TABELA: daily_metrics
+-- Agregados diarios para estatisticas rapidas
+-- ============================================
+CREATE TABLE IF NOT EXISTS daily_metrics (
+  athlete_id TEXT NOT NULL,
+  day_date TEXT NOT NULL,    -- YYYY-MM-DD
+  total_distance_km REAL DEFAULT 0,
+  total_time_min REAL DEFAULT 0,
+  total_trimp REAL DEFAULT 0,
+  total_elev_gain_m REAL DEFAULT 0,
+  count_sessions INTEGER DEFAULT 0,
+  count_easy INTEGER DEFAULT 0,
+  count_quality INTEGER DEFAULT 0,
+  count_long INTEGER DEFAULT 0,
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (athlete_id, day_date),
+  FOREIGN KEY (athlete_id) REFERENCES athlete_profile(athlete_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_daily_metrics_athlete_day
+  ON daily_metrics(athlete_id, day_date);
 
 -- ============================================
 -- TABELA: body_comp_log

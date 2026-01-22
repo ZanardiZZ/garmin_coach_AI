@@ -142,6 +142,7 @@ SELECT
   "Activity_ID",
   "distance",
   "elapsedDuration",
+  "elevationGain",
   "movingDuration",
   "maxHR",
   "hrTimeInZone_1",
@@ -203,6 +204,7 @@ else
     activity_id="$(echo "$row" | jq -r '.Activity_ID // empty')"
     dist_m="$(echo "$row" | jq -r '.distance // empty')"
     elapsed_s="$(echo "$row" | jq -r '.elapsedDuration // empty')"
+    elev_gain_m="$(echo "$row" | jq -r '.elevationGain // empty')"
     moving_s="$(echo "$row" | jq -r '.movingDuration // empty')"
     avg_mps="$(echo "$row" | jq -r '.averageSpeed // empty')"
 
@@ -254,12 +256,13 @@ else
     # Inserção idempotente por (athlete_id, start_at)
     sqlite3 "$ULTRA_COACH_DB" <<SQL
 INSERT INTO session_log
-  (athlete_id, activity_id, start_at, duration_min, distance_km, avg_hr, max_hr, avg_pace_min_km, trimp, tags, created_at)
+  (athlete_id, activity_id, start_at, duration_min, distance_km, elevation_gain_m, avg_hr, max_hr, avg_pace_min_km, trimp, tags, created_at)
 VALUES
-  ('$safe_athlete', $activity_id_sql, '$safe_start', $dur_min, $dist_km, $avg_hr,
+  ('$safe_athlete', $activity_id_sql, '$safe_start', $dur_min, $dist_km, ${elev_gain_m:-NULL}, $avg_hr,
    ${max_hr:-NULL}, ${pace_min_km:-NULL}, ${trimp:-NULL}, '$safe_tags', datetime('now'))
 ON CONFLICT(athlete_id, start_at) DO UPDATE SET
-  activity_id=COALESCE(excluded.activity_id, session_log.activity_id);
+  activity_id=COALESCE(excluded.activity_id, session_log.activity_id),
+  elevation_gain_m=COALESCE(excluded.elevation_gain_m, session_log.elevation_gain_m);
 SQL
 
     imported=$((imported+1))
@@ -371,3 +374,48 @@ else
 fi
 
 log "Sync finalizado."
+
+# ============================
+# DAILY METRICS (agregados)
+# ============================
+sqlite3 "$ULTRA_COACH_DB" <<SQL
+INSERT INTO daily_metrics (
+  athlete_id,
+  day_date,
+  total_distance_km,
+  total_time_min,
+  total_trimp,
+  total_elev_gain_m,
+  count_sessions,
+  count_easy,
+  count_quality,
+  count_long,
+  updated_at
+)
+SELECT
+  athlete_id,
+  date(start_at) AS day_date,
+  COALESCE(SUM(distance_km),0),
+  COALESCE(SUM(duration_min),0),
+  COALESCE(SUM(trimp),0),
+  COALESCE(SUM(elevation_gain_m),0),
+  COUNT(*),
+  SUM(CASE WHEN tags LIKE '%easy%' THEN 1 ELSE 0 END),
+  SUM(CASE WHEN tags LIKE '%quality%' THEN 1 ELSE 0 END),
+  SUM(CASE WHEN tags LIKE '%long%' THEN 1 ELSE 0 END),
+  datetime('now')
+FROM session_log
+WHERE athlete_id='$(sql_escape "$ATHLETE_ID")'
+  AND date(start_at) >= date('now','localtime','-${SYNC_DAYS} days')
+GROUP BY athlete_id, date(start_at)
+ON CONFLICT(athlete_id, day_date) DO UPDATE SET
+  total_distance_km=excluded.total_distance_km,
+  total_time_min=excluded.total_time_min,
+  total_trimp=excluded.total_trimp,
+  total_elev_gain_m=excluded.total_elev_gain_m,
+  count_sessions=excluded.count_sessions,
+  count_easy=excluded.count_easy,
+  count_quality=excluded.count_quality,
+  count_long=excluded.count_long,
+  updated_at=datetime('now');
+SQL

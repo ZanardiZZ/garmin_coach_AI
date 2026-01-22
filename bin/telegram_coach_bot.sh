@@ -166,20 +166,21 @@ calc_stats() {
   local stats
   stats=$(sqlite3 "$ULTRA_COACH_DB" <<SQL
 SELECT
-  ROUND(COALESCE(SUM(distance_km),0),2),
-  ROUND(COALESCE(SUM(duration_min),0),1),
-  ROUND(COALESCE(SUM(trimp),0),1),
-  COUNT(*),
-  SUM(CASE WHEN tags LIKE '%easy%' THEN 1 ELSE 0 END),
-  SUM(CASE WHEN tags LIKE '%quality%' THEN 1 ELSE 0 END),
-  SUM(CASE WHEN tags LIKE '%long%' THEN 1 ELSE 0 END)
-FROM session_log
+  ROUND(COALESCE(SUM(total_distance_km),0),2),
+  ROUND(COALESCE(SUM(total_time_min),0),1),
+  ROUND(COALESCE(SUM(total_trimp),0),1),
+  ROUND(COALESCE(SUM(total_elev_gain_m),0),1),
+  COALESCE(SUM(count_sessions),0),
+  COALESCE(SUM(count_easy),0),
+  COALESCE(SUM(count_quality),0),
+  COALESCE(SUM(count_long),0)
+FROM daily_metrics
 WHERE athlete_id='$safe_athlete'
-  AND date(start_at) >= date('now','localtime','-${days} days');
+  AND date(day_date) >= date('now','localtime','-${days} days');
 SQL
 )
-  local total_km total_min total_trimp count easy_count quality_count long_count
-  IFS='|' read -r total_km total_min total_trimp count easy_count quality_count long_count <<<"$stats"
+  local total_km total_min total_trimp total_elev count easy_count quality_count long_count
+  IFS='|' read -r total_km total_min total_trimp total_elev count easy_count quality_count long_count <<<"$stats"
   local pace
   if [[ "$total_km" != "0" && -n "$total_km" ]]; then
     pace=$(awk -v m="$total_min" -v km="$total_km" 'BEGIN{printf "%.2f", (m/km)}')
@@ -187,30 +188,7 @@ SQL
     pace="0"
   fi
 
-  local elev_gain="n/a"
-  if [[ -n "${INFLUX_URL:-}" && -n "${INFLUX_DB:-}" ]]; then
-    local act_ids
-    act_ids=$(sqlite3 "$ULTRA_COACH_DB" "SELECT activity_id FROM session_log WHERE athlete_id='$(sql_escape "$ATHLETE_ID")' AND activity_id IS NOT NULL AND date(start_at) >= date('now','localtime','-${days} days');")
-    if [[ -n "$act_ids" ]]; then
-      local total_gain=0
-      while IFS= read -r act_id; do
-        [[ -z "$act_id" ]] && continue
-        local payload
-        payload=$(curl -sS -G "$INFLUX_URL" --data-urlencode "db=$INFLUX_DB" --data-urlencode "q=SELECT Altitude FROM ActivityGPS WHERE ActivityID='$act_id' ORDER BY time ASC")
-        local gains
-        gains=$(echo "$payload" | jq -r '
-          (.results[0].series[0].values // []) |
-          map(.[1]) as $alts |
-          reduce range(1; ($alts|length)) as $i (0;
-            . + ( ($alts[$i] - $alts[$i-1]) | if . > 0 then . else 0 end )
-          )')
-        if [[ "$gains" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
-          total_gain=$(awk -v a="$total_gain" -v b="$gains" 'BEGIN{printf "%.1f", (a+b)}')
-        fi
-      done <<< "$act_ids"
-      elev_gain="${total_gain} m"
-    fi
-  fi
+  local elev_gain="${total_elev} m"
 
   cat <<MSG
 Resumo ${days} dias:

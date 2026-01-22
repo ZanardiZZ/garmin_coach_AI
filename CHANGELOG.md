@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.4.0](https://github.com/ZanardiZZ/garmin_coach_AI/compare/v0.3.0...v0.4.0) (2026-01-22)
+
+
+### Features
+
+* add coach chat and feedback across web and telegram ([dc3787c](https://github.com/ZanardiZZ/garmin_coach_AI/commit/dc3787c3c69205712be066a128290c8302d506fc))
+* add mock coach chat and feedback ([f41ca4d](https://github.com/ZanardiZZ/garmin_coach_AI/commit/f41ca4d25fe4bf3956c7de30d1827af0bd37f5ca))
+* add stats intent to telegram coach ([643e8cc](https://github.com/ZanardiZZ/garmin_coach_AI/commit/643e8cc563e80090c014481579aee953f66b7fc4))
+* allow rescheduling workouts via coach ([b3a13b7](https://github.com/ZanardiZZ/garmin_coach_AI/commit/b3a13b72fbeb68aad1feec24cb9d85671f17a9d9))
+* install Grafana dashboards without docker ([21b1a11](https://github.com/ZanardiZZ/garmin_coach_AI/commit/21b1a11081ce5f45dce1ec172c70c175748d3650))
+* parse telegram intents for feedback and reschedule ([8a8406e](https://github.com/ZanardiZZ/garmin_coach_AI/commit/8a8406e04f7d316b78d243196cc72eacb5c53a42))
+* precompute daily metrics for stats ([0f8784c](https://github.com/ZanardiZZ/garmin_coach_AI/commit/0f8784cb7c4f67007e730ba806c9ea67ca05aaa9))
+
 ## [0.3.0](https://github.com/ZanardiZZ/garmin_coach_AI/compare/v0.2.1...v0.3.0) (2026-01-22)
 
 

@@ -193,6 +193,9 @@ ensure_grafana() {
 
   log "Grafana..."
   if command -v apt-get >/dev/null 2>&1; then
+    run_step "Configurando repo Grafana (apt)" bash -c \
+      "mkdir -p /etc/apt/keyrings && curl -fsSL https://apt.grafana.com/gpg.key | gpg --dearmor -o /etc/apt/keyrings/grafana.gpg && echo 'deb [signed-by=/etc/apt/keyrings/grafana.gpg] https://apt.grafana.com stable main' > /etc/apt/sources.list.d/grafana.list && apt-get update -y" \
+      || warn "Falha ao configurar repo Grafana."
     run_step "Instalando Grafana (apt-get)" apt-get install -y grafana || warn "Falha ao instalar grafana via apt-get."
   elif command -v dnf >/dev/null 2>&1; then
     run_step "Instalando Grafana (dnf)" dnf install -y grafana || warn "Falha ao instalar grafana via dnf."

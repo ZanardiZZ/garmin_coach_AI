@@ -19,7 +19,7 @@ TARGET_DIR="${TARGET_DIR:-$TARGET_DIR_DEFAULT}"
 
 # Onde está este repo (assumindo /opt/ultra-coach)
 SCRIPT_REF=""
-if [[ -n "${BASH_SOURCE:-}" ]]; then
+if [[ "${BASH_SOURCE+set}" == "set" && ${#BASH_SOURCE[@]} -gt 0 ]]; then
   SCRIPT_REF="${BASH_SOURCE[0]}"
 else
   SCRIPT_REF="$0"
@@ -132,8 +132,15 @@ is_repo_dir() {
 ensure_core_deps() {
   if command -v apt-get >/dev/null 2>&1; then
     run_step "Instalando dependencias base (apt-get)" bash -c \
-      "apt-get update -y && apt-get install -y git curl jq sqlite3 python3 python3-venv python3-pip nodejs" \
+      "apt-get update -y && apt-get install -y git curl jq sqlite3 python3 python3-venv python3-pip" \
       || die "Falha ao instalar dependencias base (apt-get)."
+    if ! command -v node >/dev/null 2>&1; then
+      if dpkg -s npm >/dev/null 2>&1; then
+        run_step "Removendo npm conflitante (apt-get)" apt-get remove -y npm || warn "Falha ao remover npm antigo."
+      fi
+      run_step "Instalando nodejs (apt-get)" apt-get install -y nodejs \
+        || die "Falha ao instalar nodejs (apt-get)."
+    fi
     if ! command -v npm >/dev/null 2>&1; then
       run_step "Instalando npm (node)" bash -c \
         "curl -fsSL https://www.npmjs.com/install.sh | bash" \

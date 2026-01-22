@@ -138,7 +138,7 @@ is_repo_dir() {
 ensure_core_deps() {
   if command -v apt-get >/dev/null 2>&1; then
     run_step "Instalando dependencias base (apt-get)" bash -c \
-      "apt-get update -y && apt-get install -y git curl jq sqlite3 python3 python3-venv python3-pip" \
+      "apt-get update -y && apt-get install -y git curl jq sqlite3 python3 python3-venv python3-pip gnupg" \
       || die "Falha ao instalar dependencias base (apt-get)."
     if ! command -v node >/dev/null 2>&1; then
       if dpkg -s npm >/dev/null 2>&1; then
@@ -254,10 +254,10 @@ EOF
     run_step "Baixando dashboards Garmin (GitHub)" bash -c \
       "curl -fsSL https://codeload.github.com/arpanghosh8453/garmin-grafana/tar.gz/refs/heads/main | tar -xz -C $tmp_dir --strip-components=1" \
       || warn "Falha ao baixar garmin-grafana."
-    if [[ -d \"$tmp_dir/grafana/dashboards\" ]]; then
-      cp -f \"$tmp_dir/grafana/dashboards\"/*.json \"$DATA_DIR/grafana/dashboards\" 2>/dev/null || true
+    if [[ -d "$tmp_dir/grafana/dashboards" ]]; then
+      cp -f "$tmp_dir/grafana/dashboards"/*.json "$DATA_DIR/grafana/dashboards" 2>/dev/null || true
     else
-      find \"$tmp_dir\" -maxdepth 4 -type f -name \"*.json\" -path \"*/dashboard*\" -exec cp -f {} \"$DATA_DIR/grafana/dashboards\" \\; 2>/dev/null || true
+      find "$tmp_dir" -maxdepth 4 -type f -name "*.json" -path "*/dashboard*" -exec cp -f {} "$DATA_DIR/grafana/dashboards" \; 2>/dev/null || true
     fi
   fi
 

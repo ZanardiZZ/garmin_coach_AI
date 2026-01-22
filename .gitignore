@@ -39,3 +39,6 @@ coverage/
 !/tests/fixtures/databases/.gitkeep
 test-results/
 .vitest/
+
+# Python venv
+.venv/

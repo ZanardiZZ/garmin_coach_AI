@@ -87,8 +87,8 @@ insert_test_athlete() {
   local hr_rest="${3:-48}"
 
   sqlite3 "$TEST_DB" <<EOF
-INSERT OR REPLACE INTO athlete_profile (athlete_id, hr_max, hr_rest, goal_event, goal_date)
-VALUES ('$athlete_id', $hr_max, $hr_rest, 'Test Ultra 12h', '2026-06-15');
+INSERT OR REPLACE INTO athlete_profile (athlete_id, hr_max, hr_rest, goal_event, weekly_hours_target)
+VALUES ('$athlete_id', $hr_max, $hr_rest, 'Test Ultra 12h', 10.0);
 EOF
 }
 
@@ -103,12 +103,12 @@ insert_test_session() {
 
   sqlite3 "$TEST_DB" <<EOF
 INSERT OR REPLACE INTO session_log (
-  athlete_id, session_date, duration_min, distance_km, avg_hr,
-  elevation_gain_m, calories, tag, load_trimp, notes
+  athlete_id, start_at, duration_min, distance_km, avg_hr,
+  max_hr, avg_pace_min_km, trimp, tags, notes
 )
 VALUES (
-  '$athlete_id', '$session_date', $duration_min, $distance_km, $avg_hr,
-  150, 600, '$tag', 85.5, 'Test session'
+  '$athlete_id', '$session_date 06:00:00', $duration_min, $distance_km, $avg_hr,
+  165, 6.0, 85.5, '$tag', 'Test session'
 );
 EOF
 }

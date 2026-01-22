@@ -25,6 +25,7 @@ teardown() {
 @test "valida que schema cria todas as tabelas esperadas" {
   local expected_tables=(
     "athlete_profile"
+    "config_kv"
     "athlete_state"
     "weekly_state"
     "session_log"
@@ -32,7 +33,6 @@ teardown() {
     "coach_policy"
     "daily_plan"
     "daily_plan_ai"
-    "schema_migrations"
   )
 
   for table in "${expected_tables[@]}"; do
@@ -50,7 +50,11 @@ teardown() {
   assert_contains "$output" "hr_max"
   assert_contains "$output" "hr_rest"
   assert_contains "$output" "goal_event"
-  assert_contains "$output" "goal_date"
+  assert_contains "$output" "weekly_hours_target"
+  assert_contains "$output" "weight_kg"
+  assert_contains "$output" "lt_hr"
+  assert_contains "$output" "lt_pace_min_km"
+  assert_contains "$output" "lt_power_w"
 }
 
 @test "valida que tabela session_log tem colunas corretas" {
@@ -58,12 +62,15 @@ teardown() {
 
   assert_success
   assert_contains "$output" "athlete_id"
-  assert_contains "$output" "session_date"
+  assert_contains "$output" "activity_id"
+  assert_contains "$output" "start_at"
   assert_contains "$output" "duration_min"
   assert_contains "$output" "distance_km"
   assert_contains "$output" "avg_hr"
-  assert_contains "$output" "tag"
-  assert_contains "$output" "load_trimp"
+  assert_contains "$output" "max_hr"
+  assert_contains "$output" "avg_pace_min_km"
+  assert_contains "$output" "trimp"
+  assert_contains "$output" "tags"
 }
 
 @test "valida que tabela daily_plan tem colunas corretas" {
@@ -73,7 +80,10 @@ teardown() {
   assert_contains "$output" "athlete_id"
   assert_contains "$output" "plan_date"
   assert_contains "$output" "workout_type"
-  assert_contains "$output" "duration_min"
+  assert_contains "$output" "prescription"
+  assert_contains "$output" "readiness"
+  assert_contains "$output" "fatigue"
+  assert_contains "$output" "coach_mode"
 }
 
 @test "valida que tabela daily_plan_ai tem colunas corretas" {
@@ -85,7 +95,16 @@ teardown() {
   assert_contains "$output" "status"
   assert_contains "$output" "ai_workout_json"
   assert_contains "$output" "constraints_json"
+  assert_contains "$output" "ai_model"
   assert_contains "$output" "rejection_reason"
+}
+
+@test "valida que tabela config_kv tem colunas corretas" {
+  run sqlite3 "$TEST_DB" "PRAGMA table_info(config_kv);"
+
+  assert_success
+  assert_contains "$output" "key"
+  assert_contains "$output" "value_enc"
 }
 
 @test "valida que índices foram criados" {
@@ -94,6 +113,7 @@ teardown() {
   assert_success
   # SQLite cria índices automáticos para PRIMARY KEY, mas podemos ter outros
   assert_not_equal "$output" ""
+  assert_contains "$output" "idx_session_log_activity_id"
 }
 
 @test "valida que triggers foram criados" {
@@ -127,14 +147,6 @@ teardown() {
   [[ "$count" -ge 3 ]]
 }
 
-@test "valida que tabela schema_migrations existe para migrations" {
-  run sqlite3 "$TEST_DB" "SELECT sql FROM sqlite_master WHERE type='table' AND name='schema_migrations';"
-
-  assert_success
-  assert_contains "$output" "migration_name"
-  assert_contains "$output" "applied_at"
-}
-
 @test "valida que athlete_profile tem constraint de PK" {
   # Tenta inserir duplicata
   sqlite3 "$TEST_DB" "INSERT INTO athlete_profile (athlete_id, hr_max, hr_rest) VALUES ('test', 185, 48);"
@@ -150,12 +162,12 @@ teardown() {
 
   run sqlite3 "$TEST_DB" <<EOF
 INSERT INTO session_log (
-  athlete_id, session_date, duration_min, distance_km, avg_hr,
-  elevation_gain_m, calories, tag, load_trimp, notes
+  athlete_id, start_at, duration_min, distance_km, avg_hr,
+  max_hr, avg_pace_min_km, trimp, tags, notes
 )
 VALUES (
-  'test', '2026-01-18', 60, 10.0, 145,
-  150, 500, 'easy', 85.5, 'Test session'
+  'test', '2026-01-18 06:00:00', 60, 10.0, 145,
+  168, 5.5, 85.5, 'easy,import_influx', 'Test session'
 );
 EOF
 

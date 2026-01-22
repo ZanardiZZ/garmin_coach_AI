@@ -64,34 +64,30 @@ db_insert_default_athlete() {
 
   sqlite3 "$db_path" <<EOF
 INSERT OR REPLACE INTO athlete_profile (
-  athlete_id, hr_max, hr_rest, goal_event, goal_date
+  athlete_id, hr_max, hr_rest, weight_kg, lt_hr, lt_pace_min_km, lt_power_w, goal_event, weekly_hours_target
 )
 VALUES (
-  '$athlete_id', 185, 48, 'Test Ultra 12h', '2026-06-15'
+  '$athlete_id', 185, 48, 72.0, 165, 4.5, 320, 'Test Ultra 12h', 10.0
 );
 
 INSERT OR REPLACE INTO athlete_state (
-  athlete_id, state_date, coach_mode,
-  readiness_score, fatigue_score, monotony_index, strain_index,
-  avg_7d_load, avg_28d_load, cv_7d_load,
-  last_quality_date, last_long_date, days_since_quality, days_since_long
+  athlete_id, readiness_score, fatigue_score, monotony, strain,
+  weekly_load, weekly_distance_km, weekly_time_min,
+  last_long_run_km, last_long_run_at, last_quality_at, coach_mode, updated_at
 )
 VALUES (
-  '$athlete_id', '2026-01-18', 'moderate',
-  75.0, 50.0, 1.2, 85.0,
-  100.0, 95.0, 0.15,
-  '2026-01-15', '2026-01-12', 3, 6
+  '$athlete_id', 75.0, 50.0, 1.2, 85.0,
+  210.0, 42.0, 240.0,
+  28.0, '2026-01-12 06:00:00', '2026-01-15 06:00:00', 'moderate', datetime('now')
 );
 
 INSERT OR REPLACE INTO weekly_state (
-  athlete_id, week_start_date,
-  quality_days, long_days, total_days,
-  total_time_min, total_load, avg_daily_load
+  athlete_id, week_start,
+  quality_days, long_days, total_time_min, total_load, total_distance_km, updated_at
 )
 VALUES (
   '$athlete_id', '2026-01-13',
-  1, 0, 3,
-  180, 250.0, 83.3
+  1, 0, 180, 250.0, 42.0, datetime('now')
 );
 EOF
 }
@@ -105,15 +101,15 @@ db_insert_sample_sessions() {
   # Sessão easy
   sqlite3 "$db_path" <<EOF
 INSERT OR REPLACE INTO session_log (
-  athlete_id, session_date, duration_min, distance_km, avg_hr,
-  elevation_gain_m, calories, tag, load_trimp, notes
+  athlete_id, start_at, duration_min, distance_km, avg_hr,
+  max_hr, avg_pace_min_km, trimp, tags, notes
 )
 VALUES
-  ('$athlete_id', '$base_date', 60, 10.0, 145, 100, 500, 'easy', 80.0, 'Easy run'),
-  ('$athlete_id', date('$base_date', '-1 day'), 45, 7.5, 142, 80, 380, 'easy', 60.0, 'Recovery'),
-  ('$athlete_id', date('$base_date', '-2 days'), 75, 12.0, 155, 150, 650, 'quality', 110.0, 'Intervals'),
-  ('$athlete_id', date('$base_date', '-5 days'), 120, 20.0, 148, 300, 1100, 'long', 150.0, 'Long run'),
-  ('$athlete_id', date('$base_date', '-7 days'), 50, 8.0, 140, 90, 420, 'easy', 65.0, 'Easy');
+  ('$athlete_id', '$base_date 06:00:00', 60, 10.0, 145, 168, 6.0, 80.0, 'easy', 'Easy run'),
+  ('$athlete_id', date('$base_date', '-1 day') || ' 06:00:00', 45, 7.5, 142, 160, 6.4, 60.0, 'easy', 'Recovery'),
+  ('$athlete_id', date('$base_date', '-2 days') || ' 06:00:00', 75, 12.0, 155, 178, 5.8, 110.0, 'quality', 'Intervals'),
+  ('$athlete_id', date('$base_date', '-5 days') || ' 06:00:00', 120, 20.0, 148, 172, 6.5, 150.0, 'long', 'Long run'),
+  ('$athlete_id', date('$base_date', '-7 days') || ' 06:00:00', 50, 8.0, 140, 158, 6.2, 65.0, 'easy', 'Easy');
 EOF
 }
 
@@ -125,13 +121,13 @@ db_insert_sample_body_comp() {
 
   sqlite3 "$db_path" <<EOF
 INSERT OR REPLACE INTO body_comp_log (
-  athlete_id, measure_date, weight_kg, body_fat_pct,
-  skeletal_muscle_mass_kg, bone_mass_kg, body_water_pct
+  athlete_id, measured_at, device, bmi, body_fat_pct, body_water_pct,
+  bone_mass_kg, muscle_mass_kg, weight_kg
 )
 VALUES
-  ('$athlete_id', '$base_date', 70.5, 12.5, 35.2, 3.1, 62.0),
-  ('$athlete_id', date('$base_date', '-7 days'), 71.0, 13.0, 35.0, 3.1, 61.5),
-  ('$athlete_id', date('$base_date', '-14 days'), 71.3, 13.2, 34.8, 3.1, 61.2);
+  ('$athlete_id', '$base_date 07:00:00', 'Index S2', 22.5, 12.5, 62.0, 3.1, 35.2, 70.5),
+  ('$athlete_id', date('$base_date', '-7 days') || ' 07:00:00', 'Index S2', 22.7, 13.0, 61.5, 3.1, 35.0, 71.0),
+  ('$athlete_id', date('$base_date', '-14 days') || ' 07:00:00', 'Index S2', 22.8, 13.2, 61.2, 3.1, 34.8, 71.3);
 EOF
 }
 
@@ -141,14 +137,12 @@ db_insert_default_policies() {
 
   sqlite3 "$db_path" <<EOF
 INSERT OR REPLACE INTO coach_policy (
-  mode, readiness_floor, fatigue_cap,
-  max_hard_days_week, max_quality_week_min, max_long_week_min,
-  min_long_run_km, max_long_run_km
+  mode, readiness_floor, fatigue_cap, max_hard_days_week, max_long_days_week, notes
 )
 VALUES
-  ('conservative', 70, 60, 2, 120, 240, 18, 35),
-  ('moderate', 65, 70, 3, 150, 300, 18, 40),
-  ('aggressive', 60, 80, 4, 180, 360, 20, 45);
+  ('conservative', 70, 60, 1, 1, 'Test conservative'),
+  ('moderate', 60, 70, 2, 1, 'Test moderate'),
+  ('aggressive', 50, 80, 2, 2, 'Test aggressive');
 EOF
 }
 
@@ -175,7 +169,7 @@ db_get_latest_plan() {
   local db_path=$1
   local athlete_id="${2:-test_athlete}"
 
-  sqlite3 "$db_path" "SELECT plan_date, workout_type, duration_min FROM daily_plan WHERE athlete_id='$athlete_id' ORDER BY plan_date DESC LIMIT 1;"
+  sqlite3 "$db_path" "SELECT plan_date, workout_type FROM daily_plan WHERE athlete_id='$athlete_id' ORDER BY plan_date DESC LIMIT 1;"
 }
 
 # Retorna último workout AI

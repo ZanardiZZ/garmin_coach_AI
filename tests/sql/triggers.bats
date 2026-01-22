@@ -35,12 +35,12 @@ teardown() {
   # Insere nova sessão
   sqlite3 "$TEST_DB" <<EOF
 INSERT INTO session_log (
-  athlete_id, session_date, duration_min, distance_km, avg_hr,
-  elevation_gain_m, calories, tag, load_trimp, notes
+  athlete_id, start_at, duration_min, distance_km, avg_hr,
+  max_hr, avg_pace_min_km, trimp, tags, notes
 )
 VALUES (
-  'test_athlete', '2026-01-18', 60, 10.0, 145,
-  150, 500, 'easy', 85.5, 'Trigger test'
+  'test_athlete', '2026-01-18 06:00:00', 60, 10.0, 145,
+  168, 5.6, 85.5, 'easy', 'Trigger test'
 );
 EOF
 
@@ -57,17 +57,17 @@ EOF
   # Insere sessão quality
   sqlite3 "$TEST_DB" <<EOF
 INSERT INTO session_log (
-  athlete_id, session_date, duration_min, distance_km, avg_hr,
-  tag, load_trimp
+  athlete_id, start_at, duration_min, distance_km, avg_hr,
+  tags, trimp
 )
 VALUES (
-  'test_athlete', '2026-01-14', 75, 12.0, 158,
+  'test_athlete', '2026-01-14 06:00:00', 75, 12.0, 158,
   'quality', 110.0
 );
 EOF
 
   # Verifica quality_days
-  run sqlite3 "$TEST_DB" "SELECT quality_days FROM weekly_state WHERE athlete_id='test_athlete' AND week_start_date='2026-01-13';"
+  run sqlite3 "$TEST_DB" "SELECT quality_days FROM weekly_state WHERE athlete_id='test_athlete' AND week_start=date('2026-01-14','weekday 1','-7 days');"
 
   assert_success
   [[ "$output" -ge 1 ]]
@@ -80,17 +80,17 @@ EOF
   # Insere sessão long
   sqlite3 "$TEST_DB" <<EOF
 INSERT INTO session_log (
-  athlete_id, session_date, duration_min, distance_km, avg_hr,
-  tag, load_trimp
+  athlete_id, start_at, duration_min, distance_km, avg_hr,
+  tags, trimp
 )
 VALUES (
-  'test_athlete', '2026-01-18', 120, 20.0, 148,
+  'test_athlete', '2026-01-18 06:00:00', 120, 20.0, 148,
   'long', 150.0
 );
 EOF
 
   # Verifica long_days
-  run sqlite3 "$TEST_DB" "SELECT long_days FROM weekly_state WHERE athlete_id='test_athlete' AND week_start_date='2026-01-13';"
+  run sqlite3 "$TEST_DB" "SELECT long_days FROM weekly_state WHERE athlete_id='test_athlete' AND week_start=date('2026-01-18','weekday 1','-7 days');"
 
   assert_success
   [[ "$output" -ge 1 ]]
@@ -103,17 +103,17 @@ EOF
   # Insere apenas sessão easy
   sqlite3 "$TEST_DB" <<EOF
 INSERT INTO session_log (
-  athlete_id, session_date, duration_min, distance_km, avg_hr,
-  tag, load_trimp
+  athlete_id, start_at, duration_min, distance_km, avg_hr,
+  tags, trimp
 )
 VALUES (
-  'test_athlete', '2026-01-18', 60, 10.0, 145,
+  'test_athlete', '2026-01-18 06:00:00', 60, 10.0, 145,
   'easy', 85.5
 );
 EOF
 
   # Verifica que quality_days e long_days são 0
-  run sqlite3 "$TEST_DB" "SELECT quality_days, long_days FROM weekly_state WHERE athlete_id='test_athlete' AND week_start_date='2026-01-13';"
+  run sqlite3 "$TEST_DB" "SELECT quality_days, long_days FROM weekly_state WHERE athlete_id='test_athlete' AND week_start=date('2026-01-18','weekday 1','-7 days');"
 
   assert_success
   assert_output "0|0"
@@ -124,14 +124,14 @@ EOF
   db_clear_table "$TEST_DB" "weekly_state"
 
   sqlite3 "$TEST_DB" <<EOF
-INSERT INTO session_log (athlete_id, session_date, duration_min, tag, load_trimp)
+INSERT INTO session_log (athlete_id, start_at, duration_min, tags, trimp)
 VALUES
-  ('test_athlete', '2026-01-14', 60, 'easy', 85.0),
-  ('test_athlete', '2026-01-15', 45, 'easy', 60.0);
+  ('test_athlete', '2026-01-14 06:00:00', 60, 'easy', 85.0),
+  ('test_athlete', '2026-01-15 06:00:00', 45, 'easy', 60.0);
 EOF
 
   # Verifica total_time_min = 105
-  run sqlite3 "$TEST_DB" "SELECT total_time_min FROM weekly_state WHERE athlete_id='test_athlete' AND week_start_date='2026-01-13';"
+  run sqlite3 "$TEST_DB" "SELECT total_time_min FROM weekly_state WHERE athlete_id='test_athlete' AND week_start=date('2026-01-14','weekday 1','-7 days');"
 
   assert_success
   assert_output "105"
@@ -142,36 +142,17 @@ EOF
   db_clear_table "$TEST_DB" "weekly_state"
 
   sqlite3 "$TEST_DB" <<EOF
-INSERT INTO session_log (athlete_id, session_date, duration_min, tag, load_trimp)
+INSERT INTO session_log (athlete_id, start_at, duration_min, tags, trimp)
 VALUES
-  ('test_athlete', '2026-01-14', 60, 'easy', 85.0),
-  ('test_athlete', '2026-01-15', 45, 'easy', 60.0);
+  ('test_athlete', '2026-01-14 06:00:00', 60, 'easy', 85.0),
+  ('test_athlete', '2026-01-15 06:00:00', 45, 'easy', 60.0);
 EOF
 
   # Verifica total_load = 145.0
-  run sqlite3 "$TEST_DB" "SELECT total_load FROM weekly_state WHERE athlete_id='test_athlete' AND week_start_date='2026-01-13';"
+  run sqlite3 "$TEST_DB" "SELECT total_load FROM weekly_state WHERE athlete_id='test_athlete' AND week_start=date('2026-01-14','weekday 1','-7 days');"
 
   assert_success
   assert_output "145.0"
-}
-
-@test "valida que trigger calcula avg_daily_load corretamente" {
-  # Limpa e insere 3 sessões em 3 dias
-  db_clear_table "$TEST_DB" "weekly_state"
-
-  sqlite3 "$TEST_DB" <<EOF
-INSERT INTO session_log (athlete_id, session_date, duration_min, tag, load_trimp)
-VALUES
-  ('test_athlete', '2026-01-14', 60, 'easy', 90.0),
-  ('test_athlete', '2026-01-15', 60, 'easy', 90.0),
-  ('test_athlete', '2026-01-16', 60, 'easy', 90.0);
-EOF
-
-  # total_load = 270.0, total_days = 3, avg = 90.0
-  run sqlite3 "$TEST_DB" "SELECT avg_daily_load FROM weekly_state WHERE athlete_id='test_athlete' AND week_start_date='2026-01-13';"
-
-  assert_success
-  assert_output "90.0"
 }
 
 @test "valida que trigger agrupa por semana corretamente" {
@@ -180,10 +161,10 @@ EOF
 
   # Insere sessões em 2 semanas diferentes
   sqlite3 "$TEST_DB" <<EOF
-INSERT INTO session_log (athlete_id, session_date, duration_min, tag, load_trimp)
+INSERT INTO session_log (athlete_id, start_at, duration_min, tags, trimp)
 VALUES
-  ('test_athlete', '2026-01-14', 60, 'easy', 85.0),  -- Semana 1
-  ('test_athlete', '2026-01-20', 60, 'easy', 85.0);  -- Semana 2
+  ('test_athlete', '2026-01-14 06:00:00', 60, 'easy', 85.0),  -- Semana 1
+  ('test_athlete', '2026-01-20 06:00:00', 60, 'easy', 85.0);  -- Semana 2
 EOF
 
   # Deve ter 2 registros em weekly_state
@@ -193,15 +174,15 @@ EOF
   assert_output "2"
 }
 
-@test "valida que trigger não quebra em sessão sem load_trimp" {
+@test "valida que trigger não quebra em sessão sem trimp" {
   # Limpa
   db_clear_table "$TEST_DB" "weekly_state"
 
-  # Insere sessão sem load_trimp (NULL)
+  # Insere sessão sem trimp (NULL)
   sqlite3 "$TEST_DB" <<EOF
-INSERT INTO session_log (athlete_id, session_date, duration_min, tag)
+INSERT INTO session_log (athlete_id, start_at, duration_min, tags)
 VALUES
-  ('test_athlete', '2026-01-18', 60, 'easy');
+  ('test_athlete', '2026-01-18 06:00:00', 60, 'easy');
 EOF
 
   # Deve criar weekly_state mesmo com load NULL

@@ -9,6 +9,11 @@ Instalacao em 1 comando:
 curl -fsSL https://raw.githubusercontent.com/ZanardiZZ/garmin_coach_AI/main/install.sh | sudo bash
 ```
 
+Upgrade (sem perder dados):
+```bash
+curl -fsSL https://raw.githubusercontent.com/ZanardiZZ/garmin_coach_AI/main/install.sh | sudo bash -s -- --upgrade
+```
+
 Depois da instalacao:
 1) Abra o setup web: `http://<seu-host>:8080/setup`
 2) Informe OpenAI, Telegram e Garmin Connect

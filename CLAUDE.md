@@ -89,6 +89,9 @@ node /opt/ultra-coach/fit/workout_to_fit.mjs \
 # Standard installation (requires root)
 sudo ./install.sh
 
+# Upgrade sem perder dados
+sudo ./install.sh --upgrade
+
 # Skip symlinks or FIT dependencies
 sudo ./install.sh --no-symlinks --no-fit-deps
 
@@ -101,6 +104,7 @@ curl -fsSL https://raw.githubusercontent.com/ZanardiZZ/garmin_coach_AI/main/inst
 - Use Conventional Commits (e.g., `feat: ...`, `fix: ...`, `chore: ...`).
 - Breaking changes must use `!` and/or a `BREAKING CHANGE:` footer.
 - Release-Please generates version bumps and changelog from commit history.
+- Evite breaking changes; apos 1.0 a expectativa e nao ter breaking.
 
 ## Architecture
 

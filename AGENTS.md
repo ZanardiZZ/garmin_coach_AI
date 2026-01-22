@@ -11,6 +11,7 @@
 
 ## Build, Test, and Development Commands
 - `sudo ./install.sh`: one-shot installer (deps, DB, cron, web).
+- `sudo ./install.sh --upgrade`: atualiza repo e migrations sem resetar dados.
 - `make test`: run full test suite (Bash + Node + SQL).
 - `make lint`: run shellcheck + ESLint.
 - `PORT=8080 /usr/bin/node web/app.js`: run the web dashboard locally.
@@ -39,6 +40,7 @@
 ## Commit & Pull Request Guidelines
 - Commits follow Conventional Commits (e.g., `feat: add weekly plan sender`, `fix: handle NaN pace`).
 - Use `feat!:` or `fix!:` for breaking changes and include `BREAKING CHANGE:` in the body.
+- Breaking changes devem ser raras; a meta e evitar breaking apos a versao 1.0.
 - PRs should include a brief summary, key files touched, and test results.
 - If UI changes are made, include screenshots or a short screen capture.
 

@@ -53,6 +53,8 @@ DO_PY_DEPS=1
 DO_CRON=1
 DO_START_WEB=1
 DO_GRAFANA=1
+UPGRADE_ONLY=0
+FORCE_DEPS=0
 
 LOG_FILE="${LOG_FILE:-/tmp/ultra-coach-install.log}"
 QUIET="${QUIET:-1}"
@@ -111,6 +113,8 @@ Opções:
   --no-cron               Não cria /etc/cron.d/ultra-coach
   --no-start-web          Não inicia o webserver
   --no-grafana            Não instala/configura Grafana
+  --upgrade               Atualiza repo e aplica migrations sem resetar dados
+  --force-deps            Reinstala deps mesmo em upgrade
 EOF
 }
 
@@ -125,6 +129,8 @@ parse_args() {
       --no-cron) DO_CRON=0; shift ;;
       --no-start-web) DO_START_WEB=0; shift ;;
       --no-grafana) DO_GRAFANA=0; shift ;;
+      --upgrade) UPGRADE_ONLY=1; shift ;;
+      --force-deps) FORCE_DEPS=1; shift ;;
       -h|--help) usage; exit 0 ;;
       *) die "Opção desconhecida: $1 (use --help)" ;;
     esac
@@ -537,12 +543,20 @@ main() {
   ensure_dirs
   ensure_env_file
   ensure_symlinks
-  ensure_fit_deps
-  ensure_web_deps
-  ensure_python_deps
+  if [[ "$UPGRADE_ONLY" -eq 1 && "$FORCE_DEPS" -ne 1 ]]; then
+    log "Upgrade: pulando deps (use --force-deps para reinstalar)."
+  else
+    ensure_fit_deps
+    ensure_web_deps
+    ensure_python_deps
+  fi
   ensure_influxdb
   ensure_grafana
-  init_database
+  if [[ "$UPGRADE_ONLY" -eq 1 ]]; then
+    "$BIN_DIR/init_db.sh" --migrate || warn "Falha ao aplicar migrations."
+  else
+    init_database
+  fi
   ensure_cron
   start_web
   smoke_test

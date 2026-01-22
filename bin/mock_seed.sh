@@ -92,6 +92,18 @@ INSERT OR REPLACE INTO daily_plan_ai (
   '{"title":"Rodagem leve","duration_min":55,"segments":[{"type":"run","duration_min":55,"intensity":"z2"}]}',
   'mock', 'accepted', datetime('now'), datetime('now')
 );
+
+INSERT INTO coach_chat (athlete_id, channel, role, message, created_at)
+VALUES
+  ('$ATHLETE_ID', 'web', 'user', 'Treino de ontem foi puxado na subida final.', datetime('now','-2 days')),
+  ('$ATHLETE_ID', 'web', 'assistant', 'Anotado. Vamos manter o proximo treino em Z2 e reduzir 10min.', datetime('now','-2 days')),
+  ('$ATHLETE_ID', 'telegram', 'user', 'Hoje foi facil, ritmo conversando.', datetime('now','-1 day')),
+  ('$ATHLETE_ID', 'telegram', 'assistant', 'Otimo. Podemos manter a progressao leve na semana.', datetime('now','-1 day'));
+
+INSERT INTO athlete_feedback (athlete_id, session_date, perceived, rpe, conditions, notes, created_at)
+VALUES
+  ('$ATHLETE_ID', date('now','-2 days'), 'hard', 8, 'subida longa', 'Faltou perna no final', datetime('now','-2 days')),
+  ('$ATHLETE_ID', date('now','-1 day'), 'easy', 4, 'tempo fresco', 'Boa recuperacao', datetime('now','-1 day'));
 SQL
 
 echo "[mock] Dados SQLite criados para athlete_id=$ATHLETE_ID em $ULTRA_COACH_DB"

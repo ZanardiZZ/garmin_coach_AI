@@ -3,6 +3,7 @@
   "package-name": "ultra-coach",
   "include-component-in-tag": false,
   "include-v-in-tag": true,
+  "labels": ["autorelease"],
   "initial-version": "0.2.0",
   "bump-minor-pre-major": true,
   "bump-patch-for-minor-pre-major": true,

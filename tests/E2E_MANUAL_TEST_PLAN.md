@@ -150,7 +150,7 @@ trg_session_log_update_weekly
 ```bash
 sqlite3 /var/lib/ultra-coach/coach.sqlite <<EOF
 INSERT OR REPLACE INTO athlete_profile (
-  athlete_id, hr_max, hr_rest, goal_event, goal_date
+  athlete_id, name, hr_max, hr_rest, weight_kg, lt_hr, lt_pace_min_km, lt_power_w, goal_event, weekly_hours_target
 )
 VALUES (
   'test_e2e', 185, 48, 'Ultra 12h Test', '2026-06-15'
@@ -182,10 +182,9 @@ test_e2e|185|48|Ultra 12h Test|2026-06-15
 ```bash
 sqlite3 /var/lib/ultra-coach/coach.sqlite <<EOF
 INSERT OR REPLACE INTO athlete_state (
-  athlete_id, state_date, coach_mode,
-  readiness_score, fatigue_score, monotony_index, strain_index,
-  avg_7d_load, avg_28d_load, cv_7d_load,
-  last_quality_date, last_long_date, days_since_quality, days_since_long
+  athlete_id, readiness_score, fatigue_score, monotony, strain,
+  weekly_load, weekly_distance_km, weekly_time_min,
+  last_long_run_km, last_long_run_at, last_quality_at, coach_mode, updated_at
 )
 VALUES (
   'test_e2e', date('now'), 'moderate',
@@ -257,8 +256,8 @@ sqlite3 /var/lib/ultra-coach/coach.sqlite \
 sqlite3 /var/lib/ultra-coach/coach.sqlite <<EOF
 -- Sessão 1: Easy run (hoje -7 dias)
 INSERT INTO session_log (
-  athlete_id, session_date, duration_min, distance_km, avg_hr,
-  elevation_gain_m, calories, tag, load_trimp, notes
+  athlete_id, activity_id, start_at, duration_min, distance_km, avg_hr,
+  max_hr, avg_pace_min_km, trimp, tags, notes
 )
 VALUES (
   'test_e2e', date('now', '-7 days'), 60, 10.0, 145,
@@ -267,8 +266,8 @@ VALUES (
 
 -- Sessão 2: Quality (hoje -5 dias)
 INSERT INTO session_log (
-  athlete_id, session_date, duration_min, distance_km, avg_hr,
-  elevation_gain_m, calories, tag, load_trimp, notes
+  athlete_id, activity_id, start_at, duration_min, distance_km, avg_hr,
+  max_hr, avg_pace_min_km, trimp, tags, notes
 )
 VALUES (
   'test_e2e', date('now', '-5 days'), 75, 12.0, 165,
@@ -277,8 +276,8 @@ VALUES (
 
 -- Sessão 3: Long run (hoje -3 dias)
 INSERT INTO session_log (
-  athlete_id, session_date, duration_min, distance_km, avg_hr,
-  elevation_gain_m, calories, tag, load_trimp, notes
+  athlete_id, activity_id, start_at, duration_min, distance_km, avg_hr,
+  max_hr, avg_pace_min_km, trimp, tags, notes
 )
 VALUES (
   'test_e2e', date('now', '-3 days'), 120, 20.0, 152,
@@ -287,8 +286,8 @@ VALUES (
 
 -- Sessão 4: Easy (hoje -1 dia)
 INSERT INTO session_log (
-  athlete_id, session_date, duration_min, distance_km, avg_hr,
-  elevation_gain_m, calories, tag, load_trimp, notes
+  athlete_id, activity_id, start_at, duration_min, distance_km, avg_hr,
+  max_hr, avg_pace_min_km, trimp, tags, notes
 )
 VALUES (
   'test_e2e', date('now', '-1 days'), 45, 7.5, 142,
@@ -305,7 +304,7 @@ EOF
 
 ```bash
 sqlite3 /var/lib/ultra-coach/coach.sqlite \
-  "SELECT session_date, duration_min, tag FROM session_log WHERE athlete_id='test_e2e' ORDER BY session_date;"
+  "SELECT start_at, duration_min, tags FROM session_log WHERE athlete_id='test_e2e' ORDER BY start_at;"
 ```
 
 **Esperado:** Lista de 4 sessões com tags variadas (easy, quality, long)
@@ -319,7 +318,7 @@ sqlite3 /var/lib/ultra-coach/coach.sqlite \
 
 ```bash
 sqlite3 /var/lib/ultra-coach/coach.sqlite \
-  "SELECT week_start_date, total_days, quality_days, long_days, total_time_min FROM weekly_state WHERE athlete_id='test_e2e';"
+  "SELECT week_start, quality_days, long_days, total_time_min, total_load, total_distance_km FROM weekly_state WHERE athlete_id='test_e2e';"
 ```
 
 **Esperado:** Registro(s) mostrando agregação semanal
@@ -930,10 +929,10 @@ kill $SQLITE_PID
 # Pegar uma sessão e verificar TRIMP
 sqlite3 /var/lib/ultra-coach/coach.sqlite <<EOF
 SELECT
-  session_date,
+  start_at,
   duration_min,
   avg_hr,
-  load_trimp,
+  trimp,
   -- Recalcular TRIMP manualmente
   duration_min *
   ((avg_hr - 48.0) / (185.0 - 48.0)) *
@@ -946,7 +945,7 @@ EOF
 ```
 
 **Verificações:**
-- [ ] load_trimp ~= trimp_recalc (diferença < 0.5)
+- [ ] trimp ~= trimp_recalc (diferença < 0.5)
 
 ### 14.2 Verificar Weekly State
 
@@ -961,20 +960,20 @@ SELECT
   long_days
 FROM weekly_state
 WHERE athlete_id = 'test_e2e'
-  AND week_start_date = date('now', 'weekday 1', '-7 days')
+  AND week_start = date('now', 'weekday 1', '-7 days')
 
 UNION ALL
 
 SELECT
   'manual' as source,
   SUM(duration_min) as total_time_min,
-  SUM(load_trimp) as total_load,
-  SUM(CASE WHEN tag='quality' THEN 1 ELSE 0 END) as quality_days,
-  SUM(CASE WHEN tag='long' THEN 1 ELSE 0 END) as long_days
+  SUM(trimp) as total_load,
+  SUM(CASE WHEN tags LIKE '%quality%' THEN 1 ELSE 0 END) as quality_days,
+  SUM(CASE WHEN tags LIKE '%long%' THEN 1 ELSE 0 END) as long_days
 FROM session_log
 WHERE athlete_id = 'test_e2e'
-  AND date(session_date) >= date('now', 'weekday 1', '-7 days')
-  AND date(session_date) < date('now', 'weekday 1');
+  AND date(start_at) >= date('now', 'weekday 1', '-7 days')
+  AND date(start_at) < date('now', 'weekday 1');
 EOF
 ```
 

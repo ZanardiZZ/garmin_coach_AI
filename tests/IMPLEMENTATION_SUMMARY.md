@@ -113,7 +113,7 @@ tests/
 - ✅ Inserção de sessão atualiza weekly_state
 - ✅ Incremento de quality_days para tag=quality
 - ✅ Incremento de long_days para tag=long
-- ✅ Cálculo correto de total_time_min, total_load, avg_daily_load
+- ✅ Cálculo correto de total_time_min, total_load, total_distance_km
 - ✅ Agrupamento por semana
 - ✅ Tratamento de valores NULL
 

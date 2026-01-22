@@ -170,6 +170,40 @@ async function insertFeedback(athleteId, data) {
   );
 }
 
+async function reschedulePlan(athleteId, fromDate, toDate) {
+  const safeAthlete = sqlEscape(athleteId);
+  const safeFrom = sqlEscape(fromDate);
+  const safeTo = sqlEscape(toDate);
+  const existingFrom = await runSql(
+    `SELECT COUNT(*) FROM daily_plan WHERE athlete_id='${safeAthlete}' AND plan_date='${safeFrom}';`
+  );
+  if (!existingFrom || Number(existingFrom) === 0) {
+    throw new Error('Plano de origem nao encontrado.');
+  }
+  const existingTo = await runSql(
+    `SELECT COUNT(*) FROM daily_plan WHERE athlete_id='${safeAthlete}' AND plan_date='${safeTo}';`
+  );
+  const hasTarget = existingTo && Number(existingTo) > 0;
+
+  if (hasTarget) {
+    await runSql(
+      `BEGIN;
+       UPDATE daily_plan SET plan_date='${safeTo}' WHERE athlete_id='${safeAthlete}' AND plan_date='${safeFrom}';
+       UPDATE daily_plan SET plan_date='${safeFrom}' WHERE athlete_id='${safeAthlete}' AND plan_date='${safeTo}' AND rowid != (SELECT rowid FROM daily_plan WHERE athlete_id='${safeAthlete}' AND plan_date='${safeFrom}' LIMIT 1);
+       UPDATE daily_plan_ai SET plan_date='${safeTo}' WHERE athlete_id='${safeAthlete}' AND plan_date='${safeFrom}';
+       UPDATE daily_plan_ai SET plan_date='${safeFrom}' WHERE athlete_id='${safeAthlete}' AND plan_date='${safeTo}' AND rowid != (SELECT rowid FROM daily_plan_ai WHERE athlete_id='${safeAthlete}' AND plan_date='${safeFrom}' LIMIT 1);
+       COMMIT;`
+    );
+  } else {
+    await runSql(
+      `BEGIN;
+       UPDATE daily_plan SET plan_date='${safeTo}', updated_at=datetime('now') WHERE athlete_id='${safeAthlete}' AND plan_date='${safeFrom}';
+       UPDATE daily_plan_ai SET plan_date='${safeTo}', updated_at=datetime('now') WHERE athlete_id='${safeAthlete}' AND plan_date='${safeFrom}';
+       COMMIT;`
+    );
+  }
+}
+
 async function getRecentFeedback(athleteId, days = 7, limit = 10) {
   const safeAthlete = sqlEscape(athleteId);
   const rows = await runSql(
@@ -673,6 +707,25 @@ app.post('/coach/feedback', async (req, res) => {
       conditions: String(req.body.conditions || '').trim(),
       notes: String(req.body.notes || '').trim(),
     });
+    res.redirect('/coach');
+  } catch (err) {
+    res.redirect(`/coach?error=${encodeURIComponent(err.message)}`);
+  }
+});
+
+app.post('/coach/reschedule', async (req, res) => {
+  const athleteId = String(req.body.athlete || ATHLETE_DEFAULT);
+  const fromDate = String(req.body.from_date || '').trim();
+  const toDate = String(req.body.to_date || '').trim();
+  if (!fromDate || !toDate) return res.redirect('/coach?error=Datas invalidas');
+  try {
+    await reschedulePlan(athleteId, fromDate, toDate);
+    await insertCoachChat(
+      athleteId,
+      'web',
+      'assistant',
+      `Reagendado: ${fromDate} -> ${toDate}.`
+    );
     res.redirect('/coach');
   } catch (err) {
     res.redirect(`/coach?error=${encodeURIComponent(err.message)}`);

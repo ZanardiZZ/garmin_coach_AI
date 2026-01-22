@@ -59,6 +59,38 @@ VALUES ('$(sql_escape "$ATHLETE_ID")', $perceived_sql, $rpe_sql, '$safe_notes', 
 SQL
 }
 
+reschedule_plan() {
+  local from_date="$1" to_date="$2"
+  local safe_athlete
+  safe_athlete="$(sql_escape "$ATHLETE_ID")"
+  local count_from
+  count_from=$(sqlite3 "$ULTRA_COACH_DB" "SELECT COUNT(*) FROM daily_plan WHERE athlete_id='$safe_athlete' AND plan_date='$(sql_escape "$from_date")';")
+  if [[ "$count_from" -eq 0 ]]; then
+    echo "Plano de origem nao encontrado."
+    return 1
+  fi
+  local count_to
+  count_to=$(sqlite3 "$ULTRA_COACH_DB" "SELECT COUNT(*) FROM daily_plan WHERE athlete_id='$safe_athlete' AND plan_date='$(sql_escape "$to_date")';")
+  if [[ "$count_to" -gt 0 ]]; then
+    sqlite3 "$ULTRA_COACH_DB" <<SQL
+BEGIN;
+UPDATE daily_plan SET plan_date='$(sql_escape "$to_date")' WHERE athlete_id='$safe_athlete' AND plan_date='$(sql_escape "$from_date")';
+UPDATE daily_plan SET plan_date='$(sql_escape "$from_date")' WHERE athlete_id='$safe_athlete' AND plan_date='$(sql_escape "$to_date")' AND rowid != (SELECT rowid FROM daily_plan WHERE athlete_id='$safe_athlete' AND plan_date='$(sql_escape "$from_date")' LIMIT 1);
+UPDATE daily_plan_ai SET plan_date='$(sql_escape "$to_date")' WHERE athlete_id='$safe_athlete' AND plan_date='$(sql_escape "$from_date")';
+UPDATE daily_plan_ai SET plan_date='$(sql_escape "$from_date")' WHERE athlete_id='$safe_athlete' AND plan_date='$(sql_escape "$to_date")' AND rowid != (SELECT rowid FROM daily_plan_ai WHERE athlete_id='$safe_athlete' AND plan_date='$(sql_escape "$from_date")' LIMIT 1);
+COMMIT;
+SQL
+  else
+    sqlite3 "$ULTRA_COACH_DB" <<SQL
+BEGIN;
+UPDATE daily_plan SET plan_date='$(sql_escape "$to_date")', updated_at=datetime('now') WHERE athlete_id='$safe_athlete' AND plan_date='$(sql_escape "$from_date")';
+UPDATE daily_plan_ai SET plan_date='$(sql_escape "$to_date")', updated_at=datetime('now') WHERE athlete_id='$safe_athlete' AND plan_date='$(sql_escape "$from_date")';
+COMMIT;
+SQL
+  fi
+  echo "Reagendado: ${from_date} -> ${to_date}"
+}
+
 build_context() {
   local feedback sessions history
   feedback=$(sqlite3 "$ULTRA_COACH_DB" "SELECT COALESCE(session_date, date(created_at)) || ' ' || COALESCE(perceived,'') || ' rpe=' || COALESCE(rpe,'') || ' ' || COALESCE(conditions,'') || ' ' || COALESCE(notes,'') FROM athlete_feedback WHERE athlete_id='$(sql_escape "$ATHLETE_ID")' AND date(created_at) >= date('now','localtime','-14 days') ORDER BY created_at DESC LIMIT 10;")
@@ -123,6 +155,21 @@ while true; do
         notes="$rest"
         insert_feedback "$perceived" "$rpe" "$notes"
         send_message "$chat_id" "Feedback registrado."
+        continue
+      fi
+
+      if [[ "$text" == /reschedule* ]]; then
+        payload="${text#/reschedule}"
+        read -r from_date to_date rest <<<"$payload"
+        if [[ ! "$from_date" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ || ! "$to_date" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
+          send_message "$chat_id" "Uso: /reschedule YYYY-MM-DD YYYY-MM-DD"
+          continue
+        fi
+        result=$(reschedule_plan "$from_date" "$to_date") || {
+          send_message "$chat_id" "$result"
+          continue
+        }
+        send_message "$chat_id" "$result"
         continue
       fi
 

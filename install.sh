@@ -18,7 +18,7 @@ TARGET_DIR_DEFAULT="/opt/ultra-coach"
 TARGET_DIR="${TARGET_DIR:-$TARGET_DIR_DEFAULT}"
 
 # Onde está este repo (assumindo /opt/ultra-coach)
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]-$0}")" && pwd)"
 PROJECT_DIR="${PROJECT_DIR:-$SCRIPT_DIR}"
 
 # Layout padrao
@@ -125,7 +125,9 @@ ensure_core_deps() {
       "apt-get update -y && apt-get install -y git curl jq sqlite3 python3 python3-venv python3-pip nodejs" \
       || die "Falha ao instalar dependencias base (apt-get)."
     if ! command -v npm >/dev/null 2>&1; then
-      run_step "Instalando npm (apt-get)" apt-get install -y npm || warn "Falha ao instalar npm via apt-get."
+      run_step "Instalando npm (node)" bash -c \
+        "curl -fsSL https://www.npmjs.com/install.sh | bash" \
+        || warn "Falha ao instalar npm via install.sh."
     fi
   elif command -v dnf >/dev/null 2>&1; then
     run_step "Instalando dependencias base (dnf)" dnf install -y git curl jq sqlite python3 python3-pip python3-virtualenv nodejs npm \

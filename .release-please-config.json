@@ -4,7 +4,6 @@
   "include-component-in-tag": false,
   "include-v-in-tag": true,
   "labels": ["autorelease"],
-  "release-as": "0.2.0",
   "initial-version": "0.2.0",
   "bump-minor-pre-major": true,
   "bump-patch-for-minor-pre-major": true,

@@ -128,6 +128,36 @@ call_openai() {
   echo "$resp" | jq -r '.output[0].content[0].text // empty'
 }
 
+parse_intent() {
+  local text="$1"
+  local tmp_body
+  tmp_body="$(mktemp)"
+  jq -n \
+    --arg model "$MODEL" \
+    --arg text "$text" \
+    '{
+      model:$model,
+      input:[
+        {role:"system",content:"Voce e um parser de intents. Responda APENAS JSON valido."},
+        {role:"user",content:
+          ("Interprete a mensagem e responda JSON: " +
+           "{\"intent\":\"chat|feedback|reschedule\",\"perceived\":\"easy|medium|hard|null\",\"rpe\":1-10|null,\"from_date\":\"YYYY-MM-DD|null\",\"to_date\":\"YYYY-MM-DD|null\",\"notes\":\"string|null\"}. " +
+           "Use intent=feedback quando o usuario descreve como foi o treino. " +
+           "Use intent=reschedule quando pedir para mover treino. " +
+           "Use intent=chat caso contrario. " +
+           "Mensagem: " + $text)
+        }
+      ]
+    }' > "$tmp_body"
+  local resp
+  resp=$(curl -sS https://api.openai.com/v1/responses \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer ${OPENAI_API_KEY}" \
+    -d "@$tmp_body")
+  rm -f "$tmp_body"
+  echo "$resp" | jq -r '.output[0].content[0].text // empty'
+}
+
 offset=0
 if [[ -f "$OFFSET_FILE" ]]; then
   offset=$(cat "$OFFSET_FILE" | tr -d ' \t\n')
@@ -178,6 +208,34 @@ while true; do
         send_message "$chat_id" "OPENAI_API_KEY nao configurada."
         continue
       fi
+
+      intent_json="$(parse_intent "$text")"
+      intent="$(echo "$intent_json" | jq -r '.intent // "chat"' 2>/dev/null || echo "chat")"
+      if [[ "$intent" == "feedback" ]]; then
+        perceived="$(echo "$intent_json" | jq -r '.perceived // empty' 2>/dev/null)"
+        rpe="$(echo "$intent_json" | jq -r '.rpe // empty' 2>/dev/null)"
+        notes="$(echo "$intent_json" | jq -r '.notes // empty' 2>/dev/null)"
+        insert_feedback "$perceived" "$rpe" "$notes"
+        insert_chat "assistant" "Feedback registrado."
+        send_message "$chat_id" "Feedback registrado."
+        continue
+      fi
+      if [[ "$intent" == "reschedule" ]]; then
+        from_date="$(echo "$intent_json" | jq -r '.from_date // empty' 2>/dev/null)"
+        to_date="$(echo "$intent_json" | jq -r '.to_date // empty' 2>/dev/null)"
+        if [[ ! "$from_date" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ || ! "$to_date" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
+          send_message "$chat_id" "Nao entendi as datas. Ex: reagendar de 2026-01-22 para 2026-01-24."
+          continue
+        fi
+        result=$(reschedule_plan "$from_date" "$to_date") || {
+          send_message "$chat_id" "$result"
+          continue
+        }
+        insert_chat "assistant" "$result"
+        send_message "$chat_id" "$result"
+        continue
+      fi
+
       context="$(build_context)"
       prompt="${context}\n\nMensagem: ${text}"
       reply="$(call_openai "$prompt")"

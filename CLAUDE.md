@@ -91,6 +91,12 @@ sudo ./install.sh --no-symlinks --no-fit-deps
 curl -fsSL https://raw.githubusercontent.com/ZanardiZZ/garmin_coach_AI/main/install.sh | sudo bash
 ```
 
+## Commit Conventions (Release-Please)
+
+- Use Conventional Commits (e.g., `feat: ...`, `fix: ...`, `chore: ...`).
+- Breaking changes must use `!` and/or a `BREAKING CHANGE:` footer.
+- Release-Please generates version bumps and changelog from commit history.
+
 ## Architecture
 
 ### Daily Pipeline Flow

@@ -35,7 +35,8 @@
 - Git hooks: `./tests/install_hooks.sh` installs pre-commit and pre-push checks.
 
 ## Commit & Pull Request Guidelines
-- Commits are short, imperative, and scoped to a single change (e.g., “Add weekly plan sender”).
+- Commits follow Conventional Commits (e.g., `feat: add weekly plan sender`, `fix: handle NaN pace`).
+- Use `feat!:` or `fix!:` for breaking changes and include `BREAKING CHANGE:` in the body.
 - PRs should include a brief summary, key files touched, and test results.
 - If UI changes are made, include screenshots or a short screen capture.
 

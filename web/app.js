@@ -126,6 +126,119 @@ async function upsertConfig(map) {
   await runSql(`BEGIN; ${statements.join(' ')} COMMIT;`);
 }
 
+async function insertCoachChat(athleteId, channel, role, message) {
+  const safeAthlete = sqlEscape(athleteId);
+  const safeChannel = sqlEscape(channel);
+  const safeRole = sqlEscape(role);
+  const safeMessage = sqlEscape(message);
+  await runSql(
+    `INSERT INTO coach_chat (athlete_id, channel, role, message, created_at)
+     VALUES ('${safeAthlete}', '${safeChannel}', '${safeRole}', '${safeMessage}', datetime('now'));`
+  );
+}
+
+async function getCoachChatHistory(athleteId, limit = 20) {
+  const safeAthlete = sqlEscape(athleteId);
+  const rows = await runSql(
+    `SELECT role, message, created_at
+     FROM coach_chat
+     WHERE athlete_id='${safeAthlete}'
+     ORDER BY created_at DESC
+     LIMIT ${Number(limit)};`
+  );
+  if (!rows) return [];
+  return rows
+    .split('\n')
+    .map((line) => {
+      const [role, message, created_at] = line.split('|');
+      return { role, message, created_at };
+    })
+    .reverse();
+}
+
+async function insertFeedback(athleteId, data) {
+  const safeAthlete = sqlEscape(athleteId);
+  const sessionDate = data.session_date ? `'${sqlEscape(data.session_date)}'` : 'NULL';
+  const perceived = data.perceived ? `'${sqlEscape(data.perceived)}'` : 'NULL';
+  const rpeValue = toNumberOrNull(data.rpe);
+  const rpe = rpeValue === null ? 'NULL' : rpeValue;
+  const conditions = data.conditions ? `'${sqlEscape(data.conditions)}'` : 'NULL';
+  const notes = data.notes ? `'${sqlEscape(data.notes)}'` : 'NULL';
+  await runSql(
+    `INSERT INTO athlete_feedback (athlete_id, session_date, perceived, rpe, conditions, notes, created_at)
+     VALUES ('${safeAthlete}', ${sessionDate}, ${perceived}, ${rpe}, ${conditions}, ${notes}, datetime('now'));`
+  );
+}
+
+async function getRecentFeedback(athleteId, days = 7, limit = 10) {
+  const safeAthlete = sqlEscape(athleteId);
+  const rows = await runSql(
+    `SELECT COALESCE(session_date, date(created_at)), perceived, rpe, conditions, notes
+     FROM athlete_feedback
+     WHERE athlete_id='${safeAthlete}'
+       AND date(created_at) >= date('now','localtime','-${Number(days)} days')
+     ORDER BY created_at DESC
+     LIMIT ${Number(limit)};`
+  );
+  if (!rows) return [];
+  return rows.split('\n').map((line) => {
+    const [date, perceived, rpe, conditions, notes] = line.split('|');
+    return { date, perceived, rpe, conditions, notes };
+  });
+}
+
+async function getRecentSessions(athleteId, limit = 5) {
+  const safeAthlete = sqlEscape(athleteId);
+  const rows = await runSql(
+    `SELECT start_at, distance_km, duration_min, avg_hr, tags
+     FROM session_log
+     WHERE athlete_id='${safeAthlete}'
+     ORDER BY start_at DESC
+     LIMIT ${Number(limit)};`
+  );
+  if (!rows) return [];
+  return rows.split('\n').map((line) => {
+    const [start_at, distance_km, duration_min, avg_hr, tags] = line.split('|');
+    return { start_at, distance_km, duration_min, avg_hr, tags };
+  });
+}
+
+function buildCoachContext(feedback, sessions) {
+  const feedbackLines = feedback.map((f) => {
+    return `${f.date} ${f.perceived || ''} rpe=${f.rpe || ''} ${f.conditions || ''} ${f.notes || ''}`.trim();
+  });
+  const sessionLines = sessions.map((s) => {
+    return `${s.start_at} ${Number(s.distance_km || 0).toFixed(1)}km ${Math.round(Number(s.duration_min || 0))}min HR ${Math.round(Number(s.avg_hr || 0))} ${s.tags || ''}`.trim();
+  });
+  return [
+    'Feedback recente:',
+    feedbackLines.length ? feedbackLines.join(' | ') : 'Sem feedback recente.',
+    'Ultimas atividades:',
+    sessionLines.length ? sessionLines.join(' | ') : 'Sem atividades recentes.',
+  ].join('\n');
+}
+
+async function callCoach(model, apiKey, messages) {
+  const body = {
+    model,
+    input: messages,
+  };
+  const res = await fetch('https://api.openai.com/v1/responses', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || `OpenAI error ${res.status}`);
+  }
+  const payload = await res.json();
+  const output = payload.output?.[0]?.content?.[0]?.text || '';
+  return String(output).trim();
+}
 async function upsertAthletes(athletes) {
   if (!athletes.length) return;
   const statements = [];
@@ -442,6 +555,7 @@ app.get('/', async (req, res) => {
 
     res.render('index', {
       setupUrl: '/setup',
+      coachUrl: '/coach',
       athlete_id,
       name,
       goal_event,
@@ -499,6 +613,69 @@ app.get('/activities', async (req, res) => {
     res.render('activities', { profile, activities });
   } catch (err) {
     res.status(500).send(`Erro ao carregar atividades: ${err.message}`);
+  }
+});
+
+app.get('/coach', async (req, res) => {
+  const athleteId = String(req.query.athlete || ATHLETE_DEFAULT);
+  try {
+    const profile = await getAthleteProfile(athleteId);
+    if (!profile) return res.redirect('/setup');
+    const history = await getCoachChatHistory(athleteId, 20);
+    const feedback = await getRecentFeedback(athleteId, 14, 10);
+    res.render('coach', { profile, history, feedback, error: req.query.error || '' });
+  } catch (err) {
+    res.status(500).send(`Erro ao carregar coach: ${err.message}`);
+  }
+});
+
+app.post('/coach/send', async (req, res) => {
+  const athleteId = String(req.body.athlete || ATHLETE_DEFAULT);
+  const message = String(req.body.message || '').trim();
+  if (!message) return res.redirect('/coach');
+  try {
+    const config = await loadConfigMap();
+    const apiKey = config.OPENAI_API_KEY || '';
+    const model = config.MODEL || 'gpt-5';
+    if (!apiKey) return res.redirect('/coach?error=OPENAI_API_KEY ausente');
+
+    await insertCoachChat(athleteId, 'web', 'user', message);
+
+    const history = await getCoachChatHistory(athleteId, 12);
+    const feedback = await getRecentFeedback(athleteId, 14, 10);
+    const sessions = await getRecentSessions(athleteId, 5);
+    const context = buildCoachContext(feedback, sessions);
+    const messages = [
+      {
+        role: 'system',
+        content:
+          'Voce e um treinador de corrida focado em ultra endurance. Responda em PT-BR de forma pratica e objetiva.',
+      },
+      ...history.map((h) => ({ role: h.role, content: h.message })),
+      { role: 'user', content: `Contexto:\\n${context}\\n\\nMensagem: ${message}` },
+    ];
+
+    const reply = await callCoach(model, apiKey, messages);
+    await insertCoachChat(athleteId, 'web', 'assistant', reply || 'Sem resposta.');
+    res.redirect('/coach');
+  } catch (err) {
+    res.redirect(`/coach?error=${encodeURIComponent(err.message)}`);
+  }
+});
+
+app.post('/coach/feedback', async (req, res) => {
+  const athleteId = String(req.body.athlete || ATHLETE_DEFAULT);
+  try {
+    await insertFeedback(athleteId, {
+      session_date: String(req.body.session_date || '').trim(),
+      perceived: String(req.body.perceived || '').trim(),
+      rpe: String(req.body.rpe || '').trim(),
+      conditions: String(req.body.conditions || '').trim(),
+      notes: String(req.body.notes || '').trim(),
+    });
+    res.redirect('/coach');
+  } catch (err) {
+    res.redirect(`/coach?error=${encodeURIComponent(err.message)}`);
   }
 });
 

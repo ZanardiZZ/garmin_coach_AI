@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="pt-br">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Ultra Coach - Coach</title>
+    <link rel="stylesheet" href="/public/style.css" />
+  </head>
+  <body>
+    <div class="bg-grid"></div>
+    <header class="header">
+      <div class="brand">
+        <div class="brand-mark">UC</div>
+        <div class="brand-text">
+          <div class="brand-title">Coach</div>
+          <div class="brand-sub"><%= profile.name %></div>
+        </div>
+      </div>
+      <div class="header-actions">
+        <a class="btn" href="/">Dashboard</a>
+        <a class="btn" href="/activities">Atividades</a>
+        <a class="btn" href="/setup">Configuracao</a>
+      </div>
+    </header>
+
+    <main class="grid">
+      <section class="card">
+        <div class="card-title">Conversa</div>
+        <% if (error) { %>
+          <div class="alert"><%= error %></div>
+        <% } %>
+        <div class="chat">
+          <% if (history.length) { %>
+            <% history.forEach((msg) => { %>
+              <div class="chat-line <%= msg.role === 'assistant' ? 'assistant' : 'user' %>">
+                <div class="chat-meta"><%= msg.role === 'assistant' ? 'Coach' : 'Voce' %></div>
+                <div class="chat-bubble"><%= msg.message %></div>
+              </div>
+            <% }) %>
+          <% } else { %>
+            <div class="muted">Sem mensagens ainda.</div>
+          <% } %>
+        </div>
+        <form class="chat-form" method="post" action="/coach/send">
+          <input type="hidden" name="athlete" value="<%= profile.athlete_id %>" />
+          <textarea name="message" rows="3" placeholder="Escreva para o coach..."></textarea>
+          <button class="btn primary" type="submit">Enviar</button>
+        </form>
+      </section>
+
+      <section class="card">
+        <div class="card-title">Feedback do treino</div>
+        <form class="form" method="post" action="/coach/feedback">
+          <input type="hidden" name="athlete" value="<%= profile.athlete_id %>" />
+          <div class="form-row">
+            <div class="form-group">
+              <label>Data do treino (opcional)</label>
+              <input name="session_date" type="date" />
+            </div>
+            <div class="form-group">
+              <label>Percepcao</label>
+              <select name="perceived">
+                <option value="">selecionar</option>
+                <option value="easy">facil</option>
+                <option value="medium">medio</option>
+                <option value="hard">dificil</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>RPE (1-10)</label>
+              <input name="rpe" type="number" min="1" max="10" />
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Clima / Terreno / Elevacao</label>
+            <input name="conditions" type="text" placeholder="Ex: calor, subida longa, trilha pesada" />
+          </div>
+          <div class="form-group">
+            <label>Notas adicionais</label>
+            <textarea name="notes" rows="3" placeholder="Como foi o treino?" ></textarea>
+          </div>
+          <button class="btn primary" type="submit">Registrar feedback</button>
+        </form>
+        <div class="card-title">Feedback recente</div>
+        <% if (feedback.length) { %>
+          <div class="long-list">
+            <% feedback.forEach((f) => { %>
+              <div class="long-item">
+                <div><%= f.date %> - <%= f.perceived || 'n/a' %> (RPE <%= f.rpe || '-' %>)</div>
+                <div><%= f.conditions || f.notes || '-' %></div>
+              </div>
+            <% }) %>
+          </div>
+        <% } else { %>
+          <div class="muted">Sem feedback recente.</div>
+        <% } %>
+      </section>
+    </main>
+  </body>
+</html>

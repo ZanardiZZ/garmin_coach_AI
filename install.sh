@@ -276,7 +276,7 @@ EOF
 ensure_symlinks() {
   [[ "$DO_SYMLINKS" -eq 1 ]] || { log "Pulando symlinks (--no-symlinks)."; return 0; }
 
-  local scripts=("run_coach_daily.sh" "push_coach_message.sh" "sync_influx_to_sqlite.sh" "init_db.sh" "backup_db.sh" "setup_athlete.sh" "dashboard.sh" "garmin_sync.sh" "send_weekly_plan.sh")
+  local scripts=("run_coach_daily.sh" "push_coach_message.sh" "sync_influx_to_sqlite.sh" "init_db.sh" "backup_db.sh" "setup_athlete.sh" "dashboard.sh" "garmin_sync.sh" "send_weekly_plan.sh" "telegram_coach_bot.sh")
 
   for s in "${scripts[@]}"; do
     local src="$BIN_DIR/$s"
@@ -388,6 +388,9 @@ PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 
 # Ultra Coach Web (auto-start)
 @reboot root source /etc/ultra-coach/env && cd $PROJECT_DIR/web && /usr/bin/env node app.js >> $DATA_DIR/logs/web.log 2>&1
+
+# Telegram Coach Bot (auto-start)
+@reboot root source /etc/ultra-coach/env && /usr/local/bin/telegram_coach_bot.sh >> $DATA_DIR/logs/telegram_bot.log 2>&1
 EOF
 
   chmod 0644 /etc/cron.d/ultra-coach || true

@@ -187,6 +187,42 @@ CREATE TABLE IF NOT EXISTS daily_plan_ai (
 );
 
 -- ============================================
+-- TABELA: coach_chat
+-- Conversas com o coach (web/telegram)
+-- ============================================
+CREATE TABLE IF NOT EXISTS coach_chat (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  athlete_id TEXT NOT NULL,
+  channel TEXT NOT NULL,     -- web | telegram
+  role TEXT NOT NULL,        -- user | assistant
+  message TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  FOREIGN KEY (athlete_id) REFERENCES athlete_profile(athlete_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_coach_chat_athlete_time
+  ON coach_chat(athlete_id, created_at);
+
+-- ============================================
+-- TABELA: athlete_feedback
+-- Feedback subjetivo do treino
+-- ============================================
+CREATE TABLE IF NOT EXISTS athlete_feedback (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  athlete_id TEXT NOT NULL,
+  session_date TEXT,         -- YYYY-MM-DD (opcional)
+  perceived TEXT,            -- easy | medium | hard
+  rpe INTEGER,               -- 1-10
+  conditions TEXT,           -- clima/terreno
+  notes TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  FOREIGN KEY (athlete_id) REFERENCES athlete_profile(athlete_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_feedback_athlete_time
+  ON athlete_feedback(athlete_id, created_at);
+
+-- ============================================
 -- TRIGGER: Atualiza weekly_state apos insert em session_log
 -- ============================================
 CREATE TRIGGER IF NOT EXISTS trg_session_log_update_weekly

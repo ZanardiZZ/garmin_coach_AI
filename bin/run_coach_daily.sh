@@ -301,6 +301,18 @@ WITH wk AS (
   WHERE athlete_id='$ATHLETE'
     AND week_start = date('now','localtime','weekday 1','-7 days')
 ),
+fb AS (
+  SELECT
+    group_concat(
+      COALESCE(session_date, date(created_at)) || ' ' ||
+      COALESCE(perceived,'') || ' rpe=' || COALESCE(rpe,'') || ' ' ||
+      COALESCE(conditions,'') || ' ' || COALESCE(notes,''),
+      ' | '
+    ) AS feedback_recent
+  FROM athlete_feedback
+  WHERE athlete_id='$ATHLETE'
+    AND date(created_at) >= date('now','localtime','-7 days')
+),
 mode_budget AS (
   SELECT
     dp.athlete_id,
@@ -316,10 +328,12 @@ mode_budget AS (
     wk.quality_days AS quality_days_wk,
     wk.long_days AS long_days_wk,
     wk.total_time_min AS total_time_wk,
-    wk.total_load AS total_load_wk
+    wk.total_load AS total_load_wk,
+    fb.feedback_recent AS feedback_recent
   FROM daily_plan dp
   JOIN athlete_profile ap ON ap.athlete_id = dp.athlete_id
   LEFT JOIN wk ON 1=1
+  LEFT JOIN fb ON 1=1
   WHERE dp.athlete_id='$ATHLETE'
     AND dp.plan_date = '$PLAN_DATE'
 )
@@ -339,6 +353,7 @@ SELECT
     'week_long_max',     max_long_week,
     'week_total_time_min', total_time_wk,
     'week_total_load',     total_load_wk,
+    'feedback_recent', COALESCE(feedback_recent, ''),
 
     'z2_hr_cap', CAST(ROUND(hr_max * 0.75) AS INT),
     'z3_hr_floor', CAST(ROUND(hr_max * 0.80) AS INT),

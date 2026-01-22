@@ -51,6 +51,13 @@ Retorne APENAS um JSON válido, SEM texto adicional, SEM markdown, SEM comentár
 
 6. Se houver conflito entre criatividade e segurança, escolha SEMPRE a segurança
 
+## FEEDBACK DO ATLETA
+
+Se constraints.feedback_recent estiver presente, use como contexto para ajustar:
+- reduzir volume/intensidade se relatou treino dificil, dor, fadiga ou clima/terreno pesado
+- manter ou levemente progredir se relatou treino facil e boa recuperacao
+- considerar terreno, elevacao e clima nas orientacoes e alternativas
+
 ## REGRAS PARA LONG RUNS
 
 Se allowed_type = "long":

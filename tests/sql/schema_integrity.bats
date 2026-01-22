@@ -30,6 +30,8 @@ teardown() {
     "weekly_state"
     "session_log"
     "body_comp_log"
+    "coach_chat"
+    "athlete_feedback"
     "coach_policy"
     "daily_plan"
     "daily_plan_ai"
@@ -105,6 +107,30 @@ teardown() {
   assert_success
   assert_contains "$output" "key"
   assert_contains "$output" "value_enc"
+}
+
+@test "valida que tabela coach_chat tem colunas corretas" {
+  run sqlite3 "$TEST_DB" "PRAGMA table_info(coach_chat);"
+
+  assert_success
+  assert_contains "$output" "athlete_id"
+  assert_contains "$output" "channel"
+  assert_contains "$output" "role"
+  assert_contains "$output" "message"
+  assert_contains "$output" "created_at"
+}
+
+@test "valida que tabela athlete_feedback tem colunas corretas" {
+  run sqlite3 "$TEST_DB" "PRAGMA table_info(athlete_feedback);"
+
+  assert_success
+  assert_contains "$output" "athlete_id"
+  assert_contains "$output" "session_date"
+  assert_contains "$output" "perceived"
+  assert_contains "$output" "rpe"
+  assert_contains "$output" "conditions"
+  assert_contains "$output" "notes"
+  assert_contains "$output" "created_at"
 }
 
 @test "valida que índices foram criados" {

@@ -18,7 +18,17 @@ TARGET_DIR_DEFAULT="/opt/ultra-coach"
 TARGET_DIR="${TARGET_DIR:-$TARGET_DIR_DEFAULT}"
 
 # Onde está este repo (assumindo /opt/ultra-coach)
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]-$0}")" && pwd)"
+SCRIPT_REF=""
+if [[ -n "${BASH_SOURCE:-}" ]]; then
+  SCRIPT_REF="${BASH_SOURCE[0]}"
+else
+  SCRIPT_REF="$0"
+fi
+if [[ -z "$SCRIPT_REF" || "$SCRIPT_REF" == "bash" || "$SCRIPT_REF" == "-bash" || "$SCRIPT_REF" == "-" ]]; then
+  SCRIPT_DIR="$PWD"
+else
+  SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_REF")" && pwd)"
+fi
 PROJECT_DIR="${PROJECT_DIR:-$SCRIPT_DIR}"
 
 # Layout padrao

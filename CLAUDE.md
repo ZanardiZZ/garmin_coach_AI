@@ -8,6 +8,7 @@ Ultra Coach is an AI-powered daily training generator for ultra endurance runnin
 - **Deterministic planning**: Rule-based logic determines workout type (recovery, easy, quality, long) based on athlete state and weekly patterns
 - **AI variation**: OpenAI API generates detailed workout structures within strict constraints
 - **Data pipeline**: Garmin Connect (`bin/garmin_sync.py`) → InfluxDB (local v1) → SQLite → Daily coach run → FIT export → Telegram notification
+- **Coach chat**: Web/Telegram → `coach_chat` + `athlete_feedback` → usado nas constraints do dia seguinte
 
 ## Directory Structure
 
@@ -68,6 +69,9 @@ ATHLETE_ID=zz /opt/ultra-coach/bin/sync_influx_to_sqlite.sh
 
 # Garmin Connect -> InfluxDB (includes ActivityGPS when enabled)
 /opt/ultra-coach/bin/garmin_sync.sh
+
+# Telegram coach bot (chat/feedback)
+/usr/local/bin/telegram_coach_bot.sh
 ```
 
 ### FIT File Generation
@@ -148,6 +152,8 @@ curl -fsSL https://raw.githubusercontent.com/ZanardiZZ/garmin_coach_AI/main/inst
 - `weekly_state`: Weekly volume tracking (triggers on `session_log` insert)
 - `session_log`: Training history (imported from Garmin/InfluxDB)
 - `body_comp_log`: Body composition from Index S2 scale
+- `coach_chat`: Conversas (web/telegram)
+- `athlete_feedback`: Feedback subjetivo do treino
 - `coach_policy`: Training policies by mode (conservative/moderate/aggressive)
 - `daily_plan`: Deterministic workout type decision
 - `daily_plan_ai`: AI-generated workout structure with constraints
@@ -210,6 +216,7 @@ GARMIN_FETCH_ACTIVITY_DETAILS=true
 - Wizard: `http://<host>:8080/setup` (stores secrets encrypted in SQLite `config_kv`).
 - Dashboard: `http://<host>:8080/` for status + weekly view.
 - Activities: `http://<host>:8080/activities` and `/activity/:id` for maps and charts.
+- Coach: `http://<host>:8080/coach` (chat e feedback)
 
 ## Versioning & Changelog
 

@@ -128,6 +128,7 @@ Este documento serve como índice central de toda a documentação do projeto Ul
 | bin/init_db.sh | Gerenciador de database | Setup inicial, migrations |
 | bin/backup_db.sh | Sistema de backup | Backups manuais/automáticos |
 | bin/push_coach_message.sh | Notificação Telegram | Envio de mensagens |
+| bin/telegram_coach_bot.sh | Bot Telegram (coach) | Chat e feedback |
 
 ---
 
@@ -237,6 +238,8 @@ Este documento serve como índice central de toda a documentação do projeto Ul
 
 **...modifico o prompt da IA?**
 → templates/coach_prompt_ultra.txt
+→ web/views/coach.ejs
+→ bin/telegram_coach_bot.sh
 
 ---
 

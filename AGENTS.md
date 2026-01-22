@@ -20,6 +20,7 @@
 - `/opt/ultra-coach/bin/garmin_sync.sh`: Garmin Connect → InfluxDB (ActivityGPS when enabled).
 - `http://<host>:8080/setup`: web wizard for config and athletes.
 - `bin/release.sh patch`: bumps `VERSION`, updates `CHANGELOG.md`, and syncs package versions.
+- `/opt/ultra-coach/bin/telegram_coach_bot.sh`: bot de chat/feedback (Telegram).
 
 ## Coding Style & Naming Conventions
 - Bash: use `set -euo pipefail`, prefer `#!/usr/bin/env bash`, and run `shellcheck`.
@@ -44,6 +45,7 @@
 - Pipeline: Garmin Connect → InfluxDB (local v1) → SQLite → daily coach run → FIT export → Telegram.
 - Deterministic rules select workout type; OpenAI adds constrained variation.
 - FIT export lives in `fit/` and uses Garmin FIT SDK.
+ - Coach chat (web/Telegram) grava memoria em `coach_chat` e feedback em `athlete_feedback`.
 
 ## Security & Configuration Tips
 - Secrets are stored encrypted in SQLite (`config_kv`) using a local key in `~/.ultra-coach/secret.key`.

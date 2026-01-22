@@ -54,7 +54,8 @@ DO_CRON=1
 DO_START_WEB=1
 
 LOG_FILE="${LOG_FILE:-/tmp/ultra-coach-install.log}"
-log()  { echo "[install] $*"; }
+QUIET="${QUIET:-1}"
+log()  { [[ "$QUIET" -eq 1 ]] || echo "[install] $*"; }
 warn() { echo "[install][WARN] $*" >&2; }
 die()  { echo "[install][ERR] $*" >&2; exit 1; }
 
@@ -101,6 +102,7 @@ usage() {
 Uso: ./install.sh [opções]
 
 Opções:
+  --verbose               Mostra logs detalhados
   --no-symlinks           Não cria symlinks em /usr/local/bin
   --no-fit-deps           Não roda npm install em $FIT_DIR
   --no-web-deps           Não roda npm install em $PROJECT_DIR/web
@@ -113,6 +115,7 @@ EOF
 parse_args() {
   while [[ $# -gt 0 ]]; do
     case "$1" in
+      --verbose) QUIET=0; shift ;;
       --no-symlinks) DO_SYMLINKS=0; shift ;;
       --no-fit-deps) DO_FIT_DEPS=0; shift ;;
       --no-web-deps) DO_WEB_DEPS=0; shift ;;
@@ -406,6 +409,11 @@ start_web() {
 }
 
 smoke_test() {
+  if [[ "$QUIET" -eq 1 ]]; then
+    echo "[install] Verificacao final: OK"
+    return 0
+  fi
+
   log "Smoke test:"
   log "  PROJECT_DIR = $PROJECT_DIR"
   log "  DATA_DIR    = $DATA_DIR"

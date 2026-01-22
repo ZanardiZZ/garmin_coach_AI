@@ -90,11 +90,22 @@ apply_migration() {
 
   log_info "Aplicando migration: $filename"
 
-  if sqlite3 "$ULTRA_COACH_DB" < "$migration_file"; then
+  local err_file
+  err_file="$(mktemp)"
+  if sqlite3 "$ULTRA_COACH_DB" < "$migration_file" 2>"$err_file"; then
+    rm -f "$err_file"
     sqlite3 "$ULTRA_COACH_DB" "INSERT INTO _migrations (filename) VALUES ('$filename');"
     log_info "Migration $filename aplicada com sucesso"
     return 0
   else
+    local err_msg
+    err_msg="$(cat "$err_file")"
+    rm -f "$err_file"
+    if echo "$err_msg" | grep -qiE "duplicate column name|already exists"; then
+      log_warn "Migration $filename ja aplicada (schema atualizado). Marcando como aplicada."
+      sqlite3 "$ULTRA_COACH_DB" "INSERT INTO _migrations (filename) VALUES ('$filename');"
+      return 0
+    fi
     log_err "Falha ao aplicar migration $filename"
     return 1
   fi

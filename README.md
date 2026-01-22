@@ -1,6 +1,6 @@
 # Ultra Coach
 
-Ultra Coach gera treinos diarios para ultramaratona com base nas metricas do Garmin, combinando regras deterministicas com variacao controlada por IA. Inclui dashboard web, sincronizacao Garmin -> InfluxDB -> SQLite, chat com o coach (web/Telegram) e envio de treinos por Telegram.
+Ultra Coach gera treinos diarios para ultramaratona com base nas metricas do Garmin, combinando regras deterministicas com variacao controlada por IA. Inclui dashboard web, sincronizacao Garmin -> InfluxDB -> SQLite, chat com o coach (web/Telegram) e dashboards Grafana prontos.
 
 ## Como rodar
 
@@ -31,6 +31,7 @@ Execucao manual (se quiser testar):
 - Atividades: `http://<seu-host>:8080/activities`
 - Detalhe: `http://<seu-host>:8080/activity/<activity_id>`
 - Coach (chat/feedback): `http://<seu-host>:8080/coach`
+- Grafana: `http://<seu-host>:8080/grafana`
 
 Configuracoes e segredos ficam criptografados no SQLite (`config_kv`) com chave local em `~/.ultra-coach/secret.key`.
 

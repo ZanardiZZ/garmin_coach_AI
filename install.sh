@@ -52,6 +52,7 @@ DO_WEB_DEPS=1
 DO_PY_DEPS=1
 DO_CRON=1
 DO_START_WEB=1
+DO_GRAFANA=1
 
 LOG_FILE="${LOG_FILE:-/tmp/ultra-coach-install.log}"
 QUIET="${QUIET:-1}"
@@ -109,6 +110,7 @@ Opções:
   --no-py-deps            Não instala deps Python do Garmin
   --no-cron               Não cria /etc/cron.d/ultra-coach
   --no-start-web          Não inicia o webserver
+  --no-grafana            Não instala/configura Grafana
 EOF
 }
 
@@ -122,6 +124,7 @@ parse_args() {
       --no-py-deps) DO_PY_DEPS=0; shift ;;
       --no-cron) DO_CRON=0; shift ;;
       --no-start-web) DO_START_WEB=0; shift ;;
+      --no-grafana) DO_GRAFANA=0; shift ;;
       -h|--help) usage; exit 0 ;;
       *) die "Opção desconhecida: $1 (use --help)" ;;
     esac
@@ -182,6 +185,83 @@ ensure_influxdb() {
     run_step "Criando database GarminStats" influx -execute "CREATE DATABASE GarminStats" || true
   else
     run_step "Criando database GarminStats (HTTP)" curl -sS -XPOST "http://localhost:8086/query" --data-urlencode "q=CREATE DATABASE GarminStats" || true
+  fi
+}
+
+ensure_grafana() {
+  [[ "$DO_GRAFANA" -eq 1 ]] || { log "Pulando grafana (--no-grafana)."; return 0; }
+
+  log "Grafana..."
+  if command -v apt-get >/dev/null 2>&1; then
+    run_step "Instalando Grafana (apt-get)" apt-get install -y grafana || warn "Falha ao instalar grafana via apt-get."
+  elif command -v dnf >/dev/null 2>&1; then
+    run_step "Instalando Grafana (dnf)" dnf install -y grafana || warn "Falha ao instalar grafana via dnf."
+  elif command -v yum >/dev/null 2>&1; then
+    run_step "Instalando Grafana (yum)" yum install -y grafana || warn "Falha ao instalar grafana via yum."
+  else
+    warn "Gerenciador de pacotes não identificado. Instale Grafana manualmente."
+  fi
+
+  mkdir -p /etc/grafana/provisioning/datasources /etc/grafana/provisioning/dashboards
+  mkdir -p "$DATA_DIR/grafana/dashboards"
+
+  cat > /etc/grafana/provisioning/datasources/ultra-coach.yml <<EOF
+apiVersion: 1
+datasources:
+  - name: InfluxDB
+    type: influxdb
+    access: proxy
+    url: http://localhost:8086
+    database: GarminStats
+    isDefault: true
+    editable: false
+EOF
+
+  cat > /etc/grafana/provisioning/dashboards/ultra-coach.yml <<EOF
+apiVersion: 1
+providers:
+  - name: 'Ultra Coach'
+    orgId: 1
+    folder: 'Ultra Coach'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 60
+    options:
+      path: $DATA_DIR/grafana/dashboards
+EOF
+
+  if [[ -f /etc/grafana/grafana.ini ]]; then
+    if ! grep -q "allow_embedding" /etc/grafana/grafana.ini; then
+      cat >> /etc/grafana/grafana.ini <<EOF
+
+[security]
+allow_embedding = true
+
+[auth.anonymous]
+enabled = true
+org_role = Viewer
+EOF
+    fi
+  fi
+
+  local tmp_dir="/tmp/garmin-grafana"
+  rm -rf "$tmp_dir"
+  mkdir -p "$tmp_dir"
+  if command -v curl >/dev/null 2>&1; then
+    run_step "Baixando dashboards Garmin (GitHub)" bash -c \
+      "curl -fsSL https://codeload.github.com/arpanghosh8453/garmin-grafana/tar.gz/refs/heads/main | tar -xz -C $tmp_dir --strip-components=1" \
+      || warn "Falha ao baixar garmin-grafana."
+    if [[ -d \"$tmp_dir/grafana/dashboards\" ]]; then
+      cp -f \"$tmp_dir/grafana/dashboards\"/*.json \"$DATA_DIR/grafana/dashboards\" 2>/dev/null || true
+    else
+      find \"$tmp_dir\" -maxdepth 4 -type f -name \"*.json\" -path \"*/dashboard*\" -exec cp -f {} \"$DATA_DIR/grafana/dashboards\" \\; 2>/dev/null || true
+    fi
+  fi
+
+  if command -v systemctl >/dev/null 2>&1; then
+    run_step "Iniciando Grafana (systemd)" systemctl enable --now grafana-server || true
+  elif command -v service >/dev/null 2>&1; then
+    run_step "Iniciando Grafana (service)" service grafana-server start || true
   fi
 }
 
@@ -267,6 +347,8 @@ export INFLUX_PASS=""
 # export WEB_PASS=""
 
 # Segredos sao configurados via wizard web (armazenados no SQLite criptografado)
+export GRAFANA_URL="http://localhost:3000"
+export GRAFANA_ANONYMOUS="true"
 EOF
 
   chmod 0640 "$ENV_FILE" || true
@@ -456,6 +538,7 @@ main() {
   ensure_web_deps
   ensure_python_deps
   ensure_influxdb
+  ensure_grafana
   init_database
   ensure_cron
   start_web

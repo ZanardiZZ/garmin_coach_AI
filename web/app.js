@@ -522,6 +522,8 @@ app.get('/', async (req, res) => {
   const safeAthlete = athleteId.replace(/'/g, "''");
 
   try {
+    const config = await loadConfigMap();
+    const grafanaUrl = config.GRAFANA_URL || process.env.GRAFANA_URL || 'http://localhost:3000';
     const profileRow = await runSql(
       `SELECT athlete_id, name, goal_event FROM athlete_profile WHERE athlete_id='${safeAthlete}' LIMIT 1;`
     );
@@ -590,6 +592,7 @@ app.get('/', async (req, res) => {
     res.render('index', {
       setupUrl: '/setup',
       coachUrl: '/coach',
+      grafanaUrl,
       athlete_id,
       name,
       goal_event,
@@ -647,6 +650,16 @@ app.get('/activities', async (req, res) => {
     res.render('activities', { profile, activities });
   } catch (err) {
     res.status(500).send(`Erro ao carregar atividades: ${err.message}`);
+  }
+});
+
+app.get('/grafana', async (req, res) => {
+  try {
+    const config = await loadConfigMap();
+    const grafanaUrl = config.GRAFANA_URL || process.env.GRAFANA_URL || 'http://localhost:3000';
+    res.render('grafana', { grafanaUrl });
+  } catch (err) {
+    res.status(500).send(`Erro ao carregar Grafana: ${err.message}`);
   }
 });
 

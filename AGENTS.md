@@ -21,6 +21,7 @@
 - `http://<host>:8080/setup`: web wizard for config and athletes.
 - `bin/release.sh patch`: bumps `VERSION`, updates `CHANGELOG.md`, and syncs package versions.
 - `/opt/ultra-coach/bin/telegram_coach_bot.sh`: bot de chat/feedback (Telegram).
+- `http://<host>:8080/grafana`: dashboards Grafana embutidos.
 
 ## Coding Style & Naming Conventions
 - Bash: use `set -euo pipefail`, prefer `#!/usr/bin/env bash`, and run `shellcheck`.
@@ -46,6 +47,7 @@
 - Deterministic rules select workout type; OpenAI adds constrained variation.
 - FIT export lives in `fit/` and uses Garmin FIT SDK.
  - Coach chat (web/Telegram) grava memoria em `coach_chat` e feedback em `athlete_feedback`.
+ - Grafana roda local e usa dashboards provisionados do projeto garmin-grafana.
 
 ## Security & Configuration Tips
 - Secrets are stored encrypted in SQLite (`config_kv`) using a local key in `~/.ultra-coach/secret.key`.

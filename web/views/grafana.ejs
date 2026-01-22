@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="pt-br">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Ultra Coach - Grafana</title>
+    <link rel="stylesheet" href="/public/style.css" />
+  </head>
+  <body>
+    <div class="bg-grid"></div>
+    <header class="header">
+      <div class="brand">
+        <div class="brand-mark">UC</div>
+        <div class="brand-text">
+          <div class="brand-title">Grafana</div>
+          <div class="brand-sub">Dashboards Garmin</div>
+        </div>
+      </div>
+      <div class="header-actions">
+        <a class="btn" href="/">Dashboard</a>
+        <a class="btn" href="/activities">Atividades</a>
+      </div>
+    </header>
+
+    <main class="grid">
+      <section class="card">
+        <div class="card-title">Dashboards</div>
+        <div class="muted">Se o Grafana estiver protegido, abra em uma nova aba e faca login.</div>
+        <div class="grafana-frame">
+          <iframe src="<%= grafanaUrl %>" title="Grafana"></iframe>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

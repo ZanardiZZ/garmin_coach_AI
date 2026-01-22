@@ -9,6 +9,7 @@ Ultra Coach is an AI-powered daily training generator for ultra endurance runnin
 - **AI variation**: OpenAI API generates detailed workout structures within strict constraints
 - **Data pipeline**: Garmin Connect (`bin/garmin_sync.py`) → InfluxDB (local v1) → SQLite → Daily coach run → FIT export → Telegram notification
 - **Coach chat**: Web/Telegram → `coach_chat` + `athlete_feedback` → usado nas constraints do dia seguinte
+- **Grafana**: Dashboards prontos do garmin-grafana embutidos no web
 
 ## Directory Structure
 
@@ -217,6 +218,7 @@ GARMIN_FETCH_ACTIVITY_DETAILS=true
 - Dashboard: `http://<host>:8080/` for status + weekly view.
 - Activities: `http://<host>:8080/activities` and `/activity/:id` for maps and charts.
 - Coach: `http://<host>:8080/coach` (chat e feedback)
+- Grafana: `http://<host>:8080/grafana`
 
 ## Versioning & Changelog
 

@@ -12,7 +12,9 @@
 ## Build, Test, and Development Commands
 - `sudo ./install.sh`: one-shot installer (deps, DB, cron, web).
 - `sudo ./install.sh --upgrade`: atualiza repo e migrations sem resetar dados.
+- `/opt/ultra-coach/bin/uninstall.sh`: remove cron, symlinks, e para serviços (sem apagar dados).
 - `make test`: run full test suite (Bash + Node + SQL).
+- `make test-e2e-ui`: smoke test UI do dashboard (Playwright).
 - `make lint`: run shellcheck + ESLint.
 - `PORT=8080 /usr/bin/node web/app.js`: run the web dashboard locally.
 - `/opt/ultra-coach/bin/run_coach_daily.sh`: run the daily pipeline manually.

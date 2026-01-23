@@ -10,6 +10,7 @@ O Ultra Coach possui uma suite abrangente de testes que cobre:
 - **Testes SQL**: Integridade de schema, triggers, migrations
 - **Testes de Integração**: Scripts completos (run_coach_daily, sync_influx, etc)
 - **Testes E2E**: Pipeline completo do coach
+- **Testes E2E UI**: Smoke tests do dashboard (Playwright)
 
 ## Requisitos
 
@@ -133,6 +134,7 @@ tests/
 │       └── workout_to_fit.test.mjs
 ├── integration/       # Testes de integração
 ├── e2e/              # Testes end-to-end
+├── e2e_ui/           # Smoke UI (Playwright)
 ├── sql/              # Testes SQL
 │   ├── schema_integrity.bats
 │   └── triggers.bats

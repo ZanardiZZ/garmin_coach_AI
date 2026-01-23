@@ -62,6 +62,125 @@ log()  { [[ "$QUIET" -eq 1 ]] || echo "[install] $*"; }
 warn() { echo "[install][WARN] $*" >&2; }
 die()  { echo "[install][ERR] $*" >&2; exit 1; }
 
+port_in_use() {
+  local port="$1"
+  if command -v ss >/dev/null 2>&1; then
+    ss -ltn | grep -qE ":${port}\\b" && return 0
+    return 1
+  fi
+  if command -v lsof >/dev/null 2>&1; then
+    lsof -iTCP:"$port" -sTCP:LISTEN -P -n >/dev/null 2>&1 && return 0
+    return 1
+  fi
+  if command -v netstat >/dev/null 2>&1; then
+    netstat -ltn 2>/dev/null | grep -qE ":${port}\\b" && return 0
+    return 1
+  fi
+  return 1
+}
+
+pick_free_port() {
+  local port
+  for port in "$@"; do
+    if ! port_in_use "$port"; then
+      echo "$port"
+      return 0
+    fi
+  done
+  for _ in {1..40}; do
+    port=$((20000 + RANDOM % 20001))
+    if ! port_in_use "$port"; then
+      echo "$port"
+      return 0
+    fi
+  done
+  echo "$1"
+}
+
+get_env_export() {
+  local key="$1"
+  local file="$2"
+  local line
+  line=$(grep -nE "^export ${key}=" "$file" 2>/dev/null | tail -n1 | cut -d: -f3- || true)
+  if [[ -n "$line" ]]; then
+    echo "$line" | sed -E "s/^export ${key}=//" | tr -d '"'
+  fi
+}
+
+set_env_export() {
+  local key="$1"
+  local value="$2"
+  local file="$3"
+  if grep -qE "^export ${key}=" "$file" 2>/dev/null; then
+    sed -i "s|^export ${key}=.*|export ${key}=\"${value}\"|" "$file"
+  else
+    echo "export ${key}=\"${value}\"" >> "$file"
+  fi
+}
+
+extract_port_from_url() {
+  local url="$1"
+  if [[ "$url" =~ :([0-9]+) ]]; then
+    echo "${BASH_REMATCH[1]}"
+  fi
+}
+
+WEB_PORT=""
+GRAFANA_PORT=""
+GRAFANA_URL_FINAL=""
+
+resolve_ports() {
+  if [[ -f "$ENV_FILE" ]]; then
+    local existing_port
+    existing_port=$(get_env_export "PORT" "$ENV_FILE")
+    if [[ -n "$existing_port" ]]; then
+      WEB_PORT="$existing_port"
+    fi
+
+    local existing_grafana_url existing_grafana_port
+    existing_grafana_url=$(get_env_export "GRAFANA_URL" "$ENV_FILE")
+    if [[ -n "$existing_grafana_url" ]]; then
+      existing_grafana_port=$(extract_port_from_url "$existing_grafana_url")
+      if [[ -n "$existing_grafana_port" ]]; then
+        GRAFANA_PORT="$existing_grafana_port"
+        GRAFANA_URL_FINAL="$existing_grafana_url"
+      fi
+    fi
+  fi
+
+  if [[ -z "$WEB_PORT" ]]; then
+    WEB_PORT=$(pick_free_port 8080 8081 8090 9090)
+  elif port_in_use "$WEB_PORT"; then
+    warn "PORT $WEB_PORT já está em uso; escolhendo outra porta."
+    WEB_PORT=$(pick_free_port 8080 8081 8090 9090)
+  fi
+
+  if [[ -z "$GRAFANA_PORT" ]]; then
+    GRAFANA_PORT=$(pick_free_port 3000 3001 3300 3301)
+  elif port_in_use "$GRAFANA_PORT"; then
+    warn "GRAFANA_PORT $GRAFANA_PORT já está em uso; escolhendo outra porta."
+    GRAFANA_PORT=$(pick_free_port 3000 3001 3300 3301)
+  fi
+
+  if [[ -z "$GRAFANA_URL_FINAL" ]]; then
+    GRAFANA_URL_FINAL="http://localhost:${GRAFANA_PORT}"
+  fi
+}
+
+configure_grafana_port() {
+  [[ "$GRAFANA_PORT" != "3000" ]] || return 0
+  if [[ "$GRAFANA_URL_FINAL" != http://localhost:* && "$GRAFANA_URL_FINAL" != http://127.0.0.1:* ]]; then
+    return 0
+  fi
+  if [[ -f /etc/grafana/grafana.ini ]]; then
+    if grep -qE "^[;#]*http_port" /etc/grafana/grafana.ini 2>/dev/null; then
+      sed -i "s|^[;#]*http_port *=.*|http_port = $GRAFANA_PORT|" /etc/grafana/grafana.ini
+    else
+      printf "\n[server]\nhttp_port = %s\n" "$GRAFANA_PORT" >> /etc/grafana/grafana.ini
+    fi
+  fi
+}
+
 run_with_spinner() {
   local is_tty=0
   [[ -t 1 ]] && is_tty=1
@@ -253,6 +372,8 @@ EOF
     fi
   fi
 
+  configure_grafana_port
+
   local tmp_dir="/tmp/garmin-grafana"
   rm -rf "$tmp_dir"
   mkdir -p "$tmp_dir"
@@ -317,6 +438,12 @@ ensure_env_file() {
       local KEY_PATH_DEFAULT="$key_home/.ultra-coach/secret.key"
       echo "export ULTRA_COACH_KEY_PATH=\"$KEY_PATH_DEFAULT\"" >> "$ENV_FILE"
     fi
+    if [[ -n "$WEB_PORT" ]]; then
+      set_env_export "PORT" "$WEB_PORT" "$ENV_FILE"
+    fi
+    if [[ "$DO_GRAFANA" -eq 1 && -n "$GRAFANA_URL_FINAL" ]]; then
+      set_env_export "GRAFANA_URL" "$GRAFANA_URL_FINAL" "$ENV_FILE"
+    fi
     return 0
   fi
 
@@ -350,13 +477,13 @@ export INFLUX_DB="GarminStats"
 export INFLUX_USER=""
 export INFLUX_PASS=""
 
-# Web (opcional)
-# export PORT="8080"
+# Web
+export PORT="$WEB_PORT"
 # export WEB_USER=""
 # export WEB_PASS=""
 
 # Segredos sao configurados via wizard web (armazenados no SQLite criptografado)
-export GRAFANA_URL="http://localhost:3000"
+export GRAFANA_URL="$GRAFANA_URL_FINAL"
 export GRAFANA_ANONYMOUS="true"
 EOF
 
@@ -367,7 +494,7 @@ EOF
 ensure_symlinks() {
   [[ "$DO_SYMLINKS" -eq 1 ]] || { log "Pulando symlinks (--no-symlinks)."; return 0; }
 
-  local scripts=("run_coach_daily.sh" "push_coach_message.sh" "sync_influx_to_sqlite.sh" "init_db.sh" "backup_db.sh" "setup_athlete.sh" "dashboard.sh" "garmin_sync.sh" "send_weekly_plan.sh" "telegram_coach_bot.sh")
+  local scripts=("run_coach_daily.sh" "push_coach_message.sh" "sync_influx_to_sqlite.sh" "init_db.sh" "backup_db.sh" "setup_athlete.sh" "dashboard.sh" "garmin_sync.sh" "send_weekly_plan.sh" "telegram_coach_bot.sh" "uninstall.sh")
 
   for s in "${scripts[@]}"; do
     local src="$BIN_DIR/$s"
@@ -505,6 +632,10 @@ start_web() {
 smoke_test() {
   if [[ "$QUIET" -eq 1 ]]; then
     echo "[install] Verificacao final: OK"
+    echo "[install] Web: http://localhost:${WEB_PORT}"
+    if [[ "$DO_GRAFANA" -eq 1 ]]; then
+      echo "[install] Grafana: ${GRAFANA_URL_FINAL}"
+    fi
     return 0
   fi
 
@@ -530,7 +661,10 @@ smoke_test() {
 
   log "Para rodar usando env central:"
   echo "  source $ENV_FILE && /usr/local/bin/run_coach_daily.sh"
-  log "Web: http://localhost:8080 (ou PORT em $ENV_FILE)"
+  log "Web: http://localhost:${WEB_PORT} (ou PORT em $ENV_FILE)"
+  if [[ "$DO_GRAFANA" -eq 1 ]]; then
+    log "Grafana: ${GRAFANA_URL_FINAL}"
+  fi
 }
 
 main() {
@@ -541,6 +675,7 @@ main() {
   ensure_core_deps
   bootstrap_repo "$@"
   ensure_dirs
+  resolve_ports
   ensure_env_file
   ensure_symlinks
   if [[ "$UPGRADE_ONLY" -eq 1 && "$FORCE_DEPS" -ne 1 ]]; then

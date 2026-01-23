@@ -95,6 +95,9 @@ sudo ./install.sh --upgrade
 # Skip symlinks or FIT dependencies
 sudo ./install.sh --no-symlinks --no-fit-deps
 
+# Uninstall (mantem dados por padrao)
+sudo /opt/ultra-coach/bin/uninstall.sh
+
 # One-line installer (recommended)
 curl -fsSL https://raw.githubusercontent.com/ZanardiZZ/garmin_coach_AI/main/install.sh | sudo bash
 ```
@@ -315,6 +318,7 @@ make test-unit        # Unit tests only (Bash + Node.js)
 make test-unit-bash   # Bash unit tests
 make test-node        # All Node.js tests
 make test-sql         # SQL tests (schema, triggers)
+make test-e2e-ui      # Smoke UI com Playwright (activity/dashboard)
 
 # Generate coverage report
 make coverage
@@ -352,11 +356,8 @@ tests/
 
 ### CI/CD
 
-**GitHub Actions** (`.github/workflows/test.yml`):
-- Runs automatically on push/PR to `main` or `develop`
-- Tests across Node.js 18/20/22
-- Uploads coverage to Codecov
-- Runs shellcheck and ESLint
+**GitHub Actions**:
+- `ui-smoke.yml`: roda smoke UI no push para `main` e em PRs do Release-Please (label `autorelease`).
 
 **Git Hooks**:
 - `pre-commit`: Runs unit tests before commit

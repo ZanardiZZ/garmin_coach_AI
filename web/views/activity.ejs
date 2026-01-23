@@ -99,6 +99,30 @@
       </section>
     </main>
 
+    <div id="chart-modal" class="modal hidden">
+      <div class="modal-backdrop"></div>
+      <div class="modal-card">
+        <div class="modal-header">
+          <div class="modal-title" id="modal-title">Detalhe</div>
+          <button type="button" class="btn" id="modal-close">Fechar</button>
+        </div>
+        <div class="modal-body">
+          <div class="modal-chart-wrap">
+            <canvas id="modal-chart" class="modal-chart"></canvas>
+          </div>
+          <div class="modal-stats">
+            <div><span>Intervalo</span><strong id="modal-range">-</strong></div>
+            <div><span>Media</span><strong id="modal-avg">-</strong></div>
+            <div><span>Min</span><strong id="modal-min">-</strong></div>
+            <div><span>Max</span><strong id="modal-max">-</strong></div>
+            <div><span>Amostras</span><strong id="modal-count">-</strong></div>
+            <div><span>Duracao</span><strong id="modal-duration">-</strong></div>
+          </div>
+          <div class="muted">Arraste no grafico para selecionar um intervalo.</div>
+        </div>
+      </div>
+    </div>
+
     <script
       src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
       integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
@@ -149,7 +173,10 @@
         return totals.map((s) => Math.round(s / 60));
       }
 
-      function makeLineChart(canvasId, label, data, color) {
+      const chartRegistry = {};
+      let modalChart = null;
+
+      function makeLineChart(canvasId, label, data, color, unit = '') {
         const el = document.getElementById(canvasId);
         const values = data.filter((d) => d.y !== null && d.y !== undefined);
         if (!values.length) {
@@ -160,12 +187,16 @@
           el.replaceWith(msg);
           return;
         }
+        el.classList.add('chart-clickable');
+        el.dataset.chartId = canvasId;
+        el.addEventListener('click', () => openModal(canvasId));
+        chartRegistry[canvasId] = { label, unit, data, color };
         return new Chart(el, {
           type: 'line',
           data: {
             datasets: [
               {
-                label,
+                label: unit ? `${label} (${unit})` : label,
                 data,
                 borderColor: color,
                 borderWidth: 2,
@@ -178,7 +209,15 @@
             responsive: true,
             plugins: { legend: { display: false } },
             scales: {
-              x: { type: 'time', time: { unit: 'minute' } },
+              x: {
+                type: 'linear',
+                title: { display: true, text: 'Minutos' },
+                ticks: {
+                  callback(value) {
+                    return `${value}m`;
+                  },
+                },
+              },
               y: { beginAtZero: false },
             },
           },
@@ -206,15 +245,190 @@
         });
       }
 
-      async function loadData() {
-        const res = await fetch(`/api/activity/${activityId}`);
-        const payload = await res.json();
-        const points = payload.points || [];
+      function formatNumber(value) {
+        if (!Number.isFinite(value)) return '-';
+        if (Math.abs(value) >= 100) return value.toFixed(0);
+        if (Math.abs(value) >= 10) return value.toFixed(1);
+        return value.toFixed(2);
+      }
 
-        const map = L.map('map');
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-          attribution: '&copy; OpenStreetMap',
-        }).addTo(map);
+      function formatDurationMinutes(minutes) {
+        if (!Number.isFinite(minutes) || minutes <= 0) return '-';
+        const totalSeconds = Math.round(minutes * 60);
+        const mm = Math.floor(totalSeconds / 60);
+        const ss = totalSeconds % 60;
+        return `${mm}:${String(ss).padStart(2, '0')}`;
+      }
+
+      function buildSelectionPlugin(onSelect) {
+        return {
+          id: 'selection',
+          afterEvent(chart, args) {
+            const event = args.event;
+            if (!event) return;
+            const area = chart.chartArea;
+            if (!area) return;
+            if (event.type === 'mousedown') {
+              chart.$selection = { active: true, startX: event.x, endX: event.x };
+              chart.draw();
+            } else if (event.type === 'mousemove' && chart.$selection?.active) {
+              chart.$selection.endX = event.x;
+              chart.draw();
+            } else if (event.type === 'mouseup' || event.type === 'mouseout') {
+              if (chart.$selection?.active) {
+                chart.$selection.active = false;
+                chart.draw();
+                const xScale = chart.scales.x;
+                const minPx = Math.min(chart.$selection.startX, chart.$selection.endX);
+                const maxPx = Math.max(chart.$selection.startX, chart.$selection.endX);
+                const minVal = xScale.getValueForPixel(minPx);
+                const maxVal = xScale.getValueForPixel(maxPx);
+                if (Number.isFinite(minVal) && Number.isFinite(maxVal)) {
+                  onSelect(minVal, maxVal);
+                }
+              }
+            }
+          },
+          afterDraw(chart) {
+            const sel = chart.$selection;
+            if (!sel || (!sel.active && !Number.isFinite(sel.startX))) return;
+            const area = chart.chartArea;
+            if (!area) return;
+            const ctx = chart.ctx;
+            const x1 = Math.max(area.left, Math.min(sel.startX, sel.endX));
+            const x2 = Math.min(area.right, Math.max(sel.startX, sel.endX));
+            ctx.save();
+            ctx.fillStyle = 'rgba(178, 75, 58, 0.12)';
+            ctx.strokeStyle = 'rgba(178, 75, 58, 0.6)';
+            ctx.fillRect(x1, area.top, x2 - x1, area.bottom - area.top);
+            ctx.strokeRect(x1, area.top, x2 - x1, area.bottom - area.top);
+            ctx.restore();
+          },
+        };
+      }
+
+      function openModal(canvasId) {
+        const meta = chartRegistry[canvasId];
+        if (!meta) return;
+        const modal = document.getElementById('chart-modal');
+        const title = document.getElementById('modal-title');
+        const rangeEl = document.getElementById('modal-range');
+        const avgEl = document.getElementById('modal-avg');
+        const minEl = document.getElementById('modal-min');
+        const maxEl = document.getElementById('modal-max');
+        const countEl = document.getElementById('modal-count');
+        const durEl = document.getElementById('modal-duration');
+        const canvas = document.getElementById('modal-chart');
+        title.textContent = meta.label;
+        rangeEl.textContent = '-';
+        avgEl.textContent = '-';
+        minEl.textContent = '-';
+        maxEl.textContent = '-';
+        countEl.textContent = '-';
+        durEl.textContent = '-';
+        modal.classList.remove('hidden');
+
+        if (modalChart) {
+          modalChart.destroy();
+          modalChart = null;
+        }
+
+        const onSelect = (minVal, maxVal) => {
+          const min = Math.min(minVal, maxVal);
+          const max = Math.max(minVal, maxVal);
+          const slice = meta.data.filter(
+            (p) => Number.isFinite(p.x) && Number.isFinite(p.y) && p.x >= min && p.x <= max
+          );
+          const count = slice.length;
+          if (!count) {
+            rangeEl.textContent = `${formatNumber(min)}m - ${formatNumber(max)}m`;
+            avgEl.textContent = '-';
+            minEl.textContent = '-';
+            maxEl.textContent = '-';
+            countEl.textContent = '0';
+            durEl.textContent = formatDurationMinutes(max - min);
+            return;
+          }
+          const avg = slice.reduce((sum, p) => sum + p.y, 0) / count;
+          const minValue = Math.min(...slice.map((p) => p.y));
+          const maxValue = Math.max(...slice.map((p) => p.y));
+          rangeEl.textContent = `${formatNumber(min)}m - ${formatNumber(max)}m`;
+          avgEl.textContent = `${formatNumber(avg)}${meta.unit ? ` ${meta.unit}` : ''}`;
+          minEl.textContent = `${formatNumber(minValue)}${meta.unit ? ` ${meta.unit}` : ''}`;
+          maxEl.textContent = `${formatNumber(maxValue)}${meta.unit ? ` ${meta.unit}` : ''}`;
+          countEl.textContent = String(count);
+          durEl.textContent = formatDurationMinutes(max - min);
+        };
+
+        modalChart = new Chart(canvas, {
+          type: 'line',
+          data: {
+            datasets: [
+              {
+                label: meta.unit ? `${meta.label} (${meta.unit})` : meta.label,
+                data: meta.data,
+                borderColor: meta.color,
+                borderWidth: 2,
+                tension: 0.2,
+                pointRadius: 0,
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            plugins: { legend: { display: false } },
+            maintainAspectRatio: false,
+            scales: {
+              x: {
+                type: 'linear',
+                title: { display: true, text: 'Minutos' },
+                ticks: {
+                  callback(value) {
+                    return `${value}m`;
+                  },
+                },
+              },
+              y: { beginAtZero: false },
+            },
+          },
+          plugins: [buildSelectionPlugin(onSelect)],
+        });
+      }
+
+      const modalCloseBtn = document.getElementById('modal-close');
+      if (modalCloseBtn) {
+        modalCloseBtn.addEventListener('click', () => {
+          const modal = document.getElementById('chart-modal');
+          modal.classList.add('hidden');
+          if (modalChart) {
+            modalChart.destroy();
+            modalChart = null;
+          }
+        });
+      }
+      const modalRoot = document.getElementById('chart-modal');
+      if (modalRoot && modalCloseBtn) {
+        modalRoot.addEventListener('click', (event) => {
+          if (event.target.classList.contains('modal-backdrop')) {
+            modalCloseBtn.click();
+          }
+        });
+      }
+
+      async function loadData() {
+        try {
+          const res = await fetch(`/api/activity/${activityId}`);
+          const payload = await res.json();
+          const points = payload.points || [];
+
+          const mapEl = document.getElementById('map');
+          if (!mapEl || typeof L === 'undefined') {
+            throw new Error('Mapa indisponivel.');
+          }
+          const map = L.map('map');
+          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap',
+          }).addTo(map);
 
         const latlngs = points
           .filter((p) => Number.isFinite(p.Latitude) && Number.isFinite(p.Longitude))
@@ -227,6 +441,7 @@
         }
 
         const weight = weightLatest || profile.weight_kg || null;
+        const startTime = points.length ? new Date(points[0].time).getTime() : null;
         const series = points.map((p, idx) => {
           const prev = points[idx - 1];
           const alt = Number(p.Altitude);
@@ -243,9 +458,12 @@
           const speed = Number(p.Speed);
           const powerRaw = Number(p.Power);
           const powerEst = Number.isFinite(powerRaw) ? powerRaw : estimatePower(speed, grade, weight);
+          const elapsedMin =
+            startTime !== null ? (new Date(p.time).getTime() - startTime) / 60000 : null;
           return {
             ...p,
             time: p.time,
+            elapsedMin,
             PowerEst: powerEst,
             SpeedKmh: Number.isFinite(speed) ? speed * 3.6 : null,
           };
@@ -254,92 +472,114 @@
         makeLineChart(
           'chart-hr',
           'FC',
-          series.map((p) => ({ x: p.time, y: Number.isFinite(p.HeartRate) ? p.HeartRate : null })),
-          '#b24b3a'
+          series.map((p) => ({ x: p.elapsedMin, y: Number.isFinite(p.HeartRate) ? p.HeartRate : null })),
+          '#b24b3a',
+          'bpm'
         );
         makeLineChart(
           'chart-speed',
           'Velocidade (km/h)',
-          series.map((p) => ({ x: p.time, y: Number.isFinite(p.SpeedKmh) ? p.SpeedKmh : null })),
-          '#2d6a4f'
+          series.map((p) => ({ x: p.elapsedMin, y: Number.isFinite(p.SpeedKmh) ? p.SpeedKmh : null })),
+          '#2d6a4f',
+          'km/h'
         );
         makeLineChart(
           'chart-alt',
           'Elevacao',
-          series.map((p) => ({ x: p.time, y: Number.isFinite(p.Altitude) ? p.Altitude : null })),
-          '#6b5b95'
+          series.map((p) => ({ x: p.elapsedMin, y: Number.isFinite(p.Altitude) ? p.Altitude : null })),
+          '#6b5b95',
+          'm'
         );
         makeLineChart(
           'chart-stamina',
           'Stamina',
           series.map((p) => {
             const val = Number.isFinite(p.Stamina) ? p.Stamina : p.PotentialStamina;
-            return { x: p.time, y: Number.isFinite(val) ? val : null };
+            return { x: p.elapsedMin, y: Number.isFinite(val) ? val : null };
           }),
-          '#1d3557'
+          '#1d3557',
+          '%'
         );
         makeLineChart(
           'chart-power',
           'Potencia (W)',
-          series.map((p) => ({ x: p.time, y: Number.isFinite(p.PowerEst) ? p.PowerEst : null })),
-          '#ef6c00'
+          series.map((p) => ({ x: p.elapsedMin, y: Number.isFinite(p.PowerEst) ? p.PowerEst : null })),
+          '#ef6c00',
+          'W'
         );
         makeLineChart(
           'chart-cadence',
           'Cadencia',
-          series.map((p) => ({ x: p.time, y: Number.isFinite(p.Cadence) ? p.Cadence : null })),
-          '#0f766e'
+          series.map((p) => ({ x: p.elapsedMin, y: Number.isFinite(p.Cadence) ? p.Cadence : null })),
+          '#0f766e',
+          'spm'
         );
         makeLineChart(
           'chart-stride',
           'Stride',
-          series.map((p) => ({ x: p.time, y: Number.isFinite(p.StrideLength) ? p.StrideLength : null })),
-          '#64748b'
+          series.map((p) => ({ x: p.elapsedMin, y: Number.isFinite(p.StrideLength) ? p.StrideLength : null })),
+          '#64748b',
+          'm'
         );
         makeLineChart(
           'chart-vratio',
           'Vertical Ratio',
-          series.map((p) => ({ x: p.time, y: Number.isFinite(p.VerticalRatio) ? p.VerticalRatio : null })),
-          '#8b5cf6'
+          series.map((p) => ({ x: p.elapsedMin, y: Number.isFinite(p.VerticalRatio) ? p.VerticalRatio : null })),
+          '#8b5cf6',
+          '%'
         );
         makeLineChart(
           'chart-vosc',
           'Vertical Oscillation',
-          series.map((p) => ({ x: p.time, y: Number.isFinite(p.VerticalOscillation) ? p.VerticalOscillation : null })),
-          '#14b8a6'
+          series.map((p) => ({ x: p.elapsedMin, y: Number.isFinite(p.VerticalOscillation) ? p.VerticalOscillation : null })),
+          '#14b8a6',
+          'cm'
         );
         makeLineChart(
           'chart-gct',
           'Contato solo',
           series.map((p) => {
             const gct = Number.isFinite(p.GroundContactTime) ? p.GroundContactTime : p.StanceTime;
-            return { x: p.time, y: Number.isFinite(gct) ? gct : null };
+            return { x: p.elapsedMin, y: Number.isFinite(gct) ? gct : null };
           }),
-          '#ef4444'
+          '#ef4444',
+          'ms'
         );
         makeLineChart(
           'chart-temp',
           'Temperatura',
-          series.map((p) => ({ x: p.time, y: Number.isFinite(p.Temperature) ? p.Temperature : null })),
-          '#f59e0b'
+          series.map((p) => ({ x: p.elapsedMin, y: Number.isFinite(p.Temperature) ? p.Temperature : null })),
+          '#f59e0b',
+          '°C'
         );
 
-        const hrMax = profile.hr_max || 0;
-        const hrThresholds = hrMax
-          ? [0.6, 0.7, 0.8, 0.9].map((p) => p * hrMax)
-          : [];
-        const hrZones = hrThresholds.length ? timeZones(series, 'HeartRate', hrThresholds) : [];
-        if (hrZones.length) {
-          makeBarChart('chart-hr-zones', ['Z1', 'Z2', 'Z3', 'Z4', 'Z5'], hrZones, '#b24b3a');
-        }
+          const hrMax = profile.hr_max || 0;
+          const hrThresholds = hrMax
+            ? [0.6, 0.7, 0.8, 0.9].map((p) => p * hrMax)
+            : [];
+          const hrZones = hrThresholds.length ? timeZones(series, 'HeartRate', hrThresholds) : [];
+          if (hrZones.length) {
+            makeBarChart('chart-hr-zones', ['Z1', 'Z2', 'Z3', 'Z4', 'Z5'], hrZones, '#b24b3a');
+          }
 
-        const ltPower = calcLtPower(series, weight);
-        const powerThresholds = ltPower
-          ? [0.85, 0.95, 1.05, 1.15].map((p) => p * ltPower)
-          : [];
-        const powerZones = powerThresholds.length ? timeZones(series, 'PowerEst', powerThresholds) : [];
-        if (powerZones.length) {
-          makeBarChart('chart-power-zones', ['Z1', 'Z2', 'Z3', 'Z4', 'Z5'], powerZones, '#ef6c00');
+          const ltPower = calcLtPower(series, weight);
+          const powerThresholds = ltPower
+            ? [0.85, 0.95, 1.05, 1.15].map((p) => p * ltPower)
+            : [];
+          const powerZones = powerThresholds.length ? timeZones(series, 'PowerEst', powerThresholds) : [];
+          if (powerZones.length) {
+            makeBarChart('chart-power-zones', ['Z1', 'Z2', 'Z3', 'Z4', 'Z5'], powerZones, '#ef6c00');
+          }
+        } catch (err) {
+          const target = document.querySelector('.grid');
+          if (target) {
+            const alert = document.createElement('div');
+            alert.className = 'alert';
+            alert.textContent = `Erro ao carregar atividade: ${err.message}`;
+            target.prepend(alert);
+          }
+          // eslint-disable-next-line no-console
+          console.error(err);
         }
       }
 

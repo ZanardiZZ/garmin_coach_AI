@@ -1,4 +1,4 @@
-.PHONY: help test test-unit test-unit-bash test-unit-node test-integration test-e2e test-sql \
+.PHONY: help test test-unit test-unit-bash test-unit-node test-integration test-e2e test-e2e-ui test-sql \
         test-bash test-node coverage coverage-node clean install-deps lint lint-bash lint-node
 
 # Configuração
@@ -40,6 +40,10 @@ test-integration: ## Roda testes de integração
 test-e2e: ## Roda testes end-to-end
 	@echo "Rodando testes E2E..."
 	@$(BATS) $(BATS_OPTS) $(TESTS_DIR)/e2e/
+
+test-e2e-ui: ## Roda smoke test UI com Playwright (dashboard/activity)
+	@echo "Rodando testes E2E UI..."
+	@$(TESTS_DIR)/e2e_ui/run_activity_smoke.sh
 
 test-sql: ## Roda testes SQL (schema, migrations, triggers)
 	@echo "Rodando testes SQL..."

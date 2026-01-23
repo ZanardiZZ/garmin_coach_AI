@@ -39,6 +39,7 @@ coverage/
 !/tests/fixtures/databases/.gitkeep
 test-results/
 .vitest/
+playwright-report/
 
 # Python venv
 .venv/

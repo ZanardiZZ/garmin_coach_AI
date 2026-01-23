@@ -14,6 +14,7 @@ const app = express();
 const PORT = Number(process.env.PORT || 8080);
 const DB = process.env.ULTRA_COACH_DB || '/var/lib/ultra-coach/coach.sqlite';
 const ATHLETE_DEFAULT = process.env.ATHLETE || 'zz';
+const MOCK_ACTIVITY_GPS = process.env.MOCK_ACTIVITY_GPS === '1';
 const BASIC_USER = process.env.WEB_USER || '';
 const BASIC_PASS = process.env.WEB_PASS || '';
 const KEY_PATH =
@@ -398,6 +399,34 @@ async function getLatestWeight(athleteId) {
   return Number.isFinite(value) ? value : null;
 }
 
+function buildMockActivityPoints(activityId, count = 60) {
+  const base = Date.now() - 60 * 60 * 1000;
+  const points = [];
+  for (let i = 0; i < count; i += 1) {
+    const ts = new Date(base + i * 60 * 1000).toISOString();
+    points.push({
+      time: ts,
+      ActivityID: activityId,
+      ActivityType: 'running',
+      Latitude: -23.55 + i * 0.00001,
+      Longitude: -46.633 + i * 0.00001,
+      HeartRate: 140 + (i % 20),
+      Speed: 3.0 + (i % 5) * 0.05,
+      Distance: i * 50,
+      Altitude: 700 + (i % 10) * 1.2,
+      Cadence: 160 + (i % 10),
+      StrideLength: 1.0 + (i % 5) * 0.02,
+      VerticalRatio: 8.0 + (i % 5) * 0.1,
+      VerticalOscillation: 8.0 + (i % 5) * 0.05,
+      GroundContactTime: 260 + (i % 10) * 2,
+      Temperature: 20 + (i % 5),
+      Power: 280 + (i % 15),
+      Stamina: 100 - i,
+    });
+  }
+  return points;
+}
+
 app.get('/setup', async (req, res) => {
   try {
     const config = await loadConfigMap();
@@ -772,6 +801,9 @@ app.get('/activity/:id', async (req, res) => {
 
 app.get('/api/activity/:id', async (req, res) => {
   const activityId = String(req.params.id);
+  if (MOCK_ACTIVITY_GPS && activityId.startsWith('mock-')) {
+    return res.json({ points: buildMockActivityPoints(activityId) });
+  }
   const config = await loadConfigMap();
   const influxUrl = config.INFLUX_URL || 'http://localhost:8086/query';
   const influxDb = config.INFLUX_DB || 'GarminStats';

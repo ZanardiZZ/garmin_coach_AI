@@ -117,6 +117,8 @@ coach_chat            athlete_feedback
 
 ```bash
 /opt/ultra-coach/bin/mock_seed.sh --reset
+
+Abra o dashboard com `/?athlete=<id>` caso o atleta default nao seja o mesmo do mock.
 ```
 
 **Verificações:**

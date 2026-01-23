@@ -1,0 +1,56 @@
+name: ui-smoke
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  ui-smoke:
+    if: github.actor != 'github-actions[bot]' && (github.event_name == 'push' || contains(github.event.pull_request.labels.*.name, 'autorelease'))
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install system deps
+        run: sudo apt-get update && sudo apt-get install -y sqlite3
+
+      - name: Install web deps
+        run: cd web && npm install
+
+      - name: Install Playwright browsers
+        run: cd web && npx playwright install --with-deps chromium
+
+      - name: Run UI smoke
+        env:
+          SCREENSHOT_DIR: docs/screenshots
+        run: make test-e2e-ui
+
+      - name: Upload screenshots artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-screenshots
+          path: docs/screenshots/*.png
+
+      - name: Commit screenshots
+        if: github.event_name == 'push'
+        run: |
+          if git diff --quiet -- docs/screenshots README.md; then
+            echo "No screenshot changes."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/screenshots README.md
+          git commit -m "chore(ui): update screenshots [skip ci]"
+          git push

@@ -14,6 +14,18 @@ Guia rápido para executar testes End-to-End do Ultra Coach.
 
 Se algo falhar, veja [E2E_MANUAL_TEST_PLAN.md](E2E_MANUAL_TEST_PLAN.md) para troubleshooting.
 
+## UI smoke test (Playwright)
+
+Esse teste valida o dashboard de atividade e evita erros de JS antes de publicar:
+
+```
+make test-e2e-ui
+```
+
+Requisitos:
+- `cd web && npm install`
+- `cd web && npx playwright install --with-deps chromium`
+
 ---
 
 ### 2. Inicializar Database

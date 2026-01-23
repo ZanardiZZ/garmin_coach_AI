@@ -2,7 +2,7 @@
 set -euo pipefail
 
 : "${ULTRA_COACH_DB:=/var/lib/ultra-coach/coach.sqlite}"
-: "${ATHLETE_ID:=demo}"
+: "${ATHLETE_ID:=${ATHLETE:-zz}}"
 
 usage() {
   cat <<EOF
@@ -35,6 +35,9 @@ DELETE FROM session_log WHERE athlete_id='$ATHLETE_ID';
 DELETE FROM body_comp_log WHERE athlete_id='$ATHLETE_ID';
 DELETE FROM weekly_state WHERE athlete_id='$ATHLETE_ID';
 DELETE FROM athlete_state WHERE athlete_id='$ATHLETE_ID';
+DELETE FROM daily_metrics WHERE athlete_id='$ATHLETE_ID';
+DELETE FROM coach_chat WHERE athlete_id='$ATHLETE_ID';
+DELETE FROM athlete_feedback WHERE athlete_id='$ATHLETE_ID';
 DELETE FROM athlete_profile WHERE athlete_id='$ATHLETE_ID';
 SQL
 fi
@@ -93,6 +96,14 @@ INSERT OR REPLACE INTO daily_plan_ai (
   'mock', 'accepted', datetime('now'), datetime('now')
 );
 
+INSERT OR REPLACE INTO daily_metrics (
+  athlete_id, day_date, total_distance_km, total_time_min, total_trimp, total_elev_gain_m,
+  count_sessions, count_easy, count_quality, count_long, updated_at
+) VALUES
+  ('$ATHLETE_ID', date('now','-1 day'), 10.5, 55, 78, 240, 1, 1, 0, 0, datetime('now')),
+  ('$ATHLETE_ID', date('now','-3 days'), 18.3, 95, 132, 520, 1, 0, 0, 1, datetime('now')),
+  ('$ATHLETE_ID', date('now','-5 days'), 12.0, 70, 110, 310, 1, 0, 1, 0, datetime('now'));
+
 INSERT INTO coach_chat (athlete_id, channel, role, message, created_at)
 VALUES
   ('$ATHLETE_ID', 'web', 'user', 'Treino de ontem foi puxado na subida final.', datetime('now','-2 days')),
@@ -107,9 +118,14 @@ VALUES
 SQL
 
 echo "[mock] Dados SQLite criados para athlete_id=$ATHLETE_ID em $ULTRA_COACH_DB"
+echo "[mock] Abra http://<host>:<PORT>/?athlete=$ATHLETE_ID ou exporte ATHLETE=$ATHLETE_ID no env"
+echo "[mock] ActivityGPS gerado para activity_id=mock-001 (use /activity/mock-001)"
 
-INFLUX_URL="${INFLUX_URL:-http://localhost:8086/write}"
 INFLUX_DB="${INFLUX_DB:-GarminStats}"
+INFLUX_WRITE_URL="${INFLUX_WRITE_URL:-${INFLUX_URL:-http://localhost:8086/write}}"
+if [[ "$INFLUX_WRITE_URL" == *"/query" ]]; then
+  INFLUX_WRITE_URL="${INFLUX_WRITE_URL%/query}/write"
+fi
 
 base_ts="$(date -u -d '1 day ago 06:00:00' +%s)"
 
@@ -131,12 +147,17 @@ for i in $(seq 0 59); do
   power=$((280 + (i % 15)))
   stamina=$((100 - i))
   ts_ns=$((ts * 1000000000))
-  points+="ActivityGPS,ActivityID=mock-001,ActivityType=running Latitude=$lat,Longitude=$lon,HeartRate=$hr,Speed=$speed,Distance=$dist,Altitude=$alt,Cadence=$cad,StrideLength=$stride,VerticalRatio=$vratio,VerticalOscillation=$vosc,GroundContactTime=$gct,Temperature=$temp,Power=$power,Stamina=$stamina $ts_ns\n"
+  printf -v points '%sActivityGPS,ActivityID=mock-001,ActivityType=running Latitude=%s,Longitude=%s,HeartRate=%s,Speed=%s,Distance=%s,Altitude=%s,Cadence=%s,StrideLength=%s,VerticalRatio=%s,VerticalOscillation=%s,GroundContactTime=%s,Temperature=%s,Power=%s,Stamina=%s %s\n' \
+    "$points" "$lat" "$lon" "$hr" "$speed" "$dist" "$alt" "$cad" "$stride" "$vratio" "$vosc" "$gct" "$temp" "$power" "$stamina" "$ts_ns"
 done
 
 if command -v curl >/dev/null 2>&1; then
-  curl -sS -XPOST "$INFLUX_URL?db=$INFLUX_DB" --data-binary "$points" >/dev/null 2>&1 || true
-  echo "[mock] ActivityGPS escrito no InfluxDB ($INFLUX_DB)"
+  status=$(curl -sS -o /tmp/ultra-coach-mock-influx.out -w "%{http_code}" -XPOST "$INFLUX_WRITE_URL?db=$INFLUX_DB" --data-binary "$points" || true)
+  if [[ "$status" == "204" ]]; then
+    echo "[mock] ActivityGPS escrito no InfluxDB ($INFLUX_DB)"
+  else
+    echo "[mock][WARN] Falha ao escrever ActivityGPS (HTTP $status). Veja /tmp/ultra-coach-mock-influx.out"
+  fi
 else
   echo "[mock][WARN] curl nao encontrado; ActivityGPS nao enviado"
 fi

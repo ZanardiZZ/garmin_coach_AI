@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.5.0](https://github.com/ZanardiZZ/garmin_coach_AI/compare/v0.4.0...v0.5.0) (2026-01-23)
+
+
+### Features
+
+* add ui smoke tests and installer updates ([58080be](https://github.com/ZanardiZZ/garmin_coach_AI/commit/58080bea4c9c84a49116283c2c554c71c5c02dcb))
+* add upgrade mode to installer ([43d5cb7](https://github.com/ZanardiZZ/garmin_coach_AI/commit/43d5cb730884d11ff1f230b530be29bda22ffab6))
+
+
+### Bug Fixes
+
+* add Grafana apt repo on Debian ([b73d7cd](https://github.com/ZanardiZZ/garmin_coach_AI/commit/b73d7cdceaa6ac321ada00d089d850285d5dec9f))
+* avoid interactive gpg prompt in installer ([93f0c31](https://github.com/ZanardiZZ/garmin_coach_AI/commit/93f0c316ac51fc32c3180ae0450cd5c2958b4373))
+* make grafana install robust on Debian ([c308911](https://github.com/ZanardiZZ/garmin_coach_AI/commit/c30891178580eddf97c2374f6b62d6a285dda932))
+* tolerate duplicate-column migrations ([94415b5](https://github.com/ZanardiZZ/garmin_coach_AI/commit/94415b548d635609005455b5f1b4bcd170be1188))
+
 ## [0.4.0](https://github.com/ZanardiZZ/garmin_coach_AI/compare/v0.3.0...v0.4.0) (2026-01-22)
 
 
